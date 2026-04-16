@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: anime-club-dev
+
+resources:
+  - ../../base
+
+patches:
+  # Scale down for dev
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: anime-club-api
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: anime-club-frontend
+
+  # Dev ConfigMap overrides
+  - patch: |
+      - op: replace
+        path: /data/FRONTEND_URL
+        value: "http://localhost:5173"
+      - op: replace
+        path: /data/API_URL
+        value: "http://localhost:3001/api"
+    target:
+      kind: ConfigMap
+      name: anime-club-config
+
+commonLabels:
+  env: dev

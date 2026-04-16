@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: anime-club
+
+resources:
+  - ../../base
+
+patches:
+  # Prod: more replicas, stricter resources
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: anime-club-api
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: anime-club-frontend
+
+commonLabels:
+  env: prod
+
+images:
+  - name: ghcr.io/youruser/anime-club-api
+    newTag: "1.0.0"   # pin exact tag in prod; CI updates this
+  - name: ghcr.io/youruser/anime-club-frontend
+    newTag: "1.0.0"

@@ -1,0 +1,84 @@
+# --- API Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anime-club-api
+spec:
+  selector:
+    app: anime-club-api
+  ports:
+    - port: 3001
+      targetPort: 3001
+  type: ClusterIP
+
+---
+# --- Frontend Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: anime-club-frontend
+spec:
+  selector:
+    app: anime-club-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# --- Persistent Volume Claim for SQLite DB ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: anime-club-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard   # swap for your cluster's StorageClass
+
+---
+# --- ConfigMap (non-sensitive env vars) ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: anime-club-config
+data:
+  FRONTEND_URL: "https://anime.yourapp.dev"
+  API_URL: "https://anime.yourapp.dev/api"
+
+---
+# --- Ingress (nginx) ---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: anime-club-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - anime.yourapp.dev
+      secretName: anime-club-tls
+  rules:
+    - host: anime.yourapp.dev
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: anime-club-api
+                port:
+                  number: 3001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: anime-club-frontend
+                port:
+                  number: 80

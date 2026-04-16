@@ -1,0 +1,12 @@
+# base kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: anime-club
+
+resources:
+  - api-deployment.yaml
+  - frontend-deployment.yaml
+  - services-and-infra.yaml
+  - cron-backup.yaml
+  - hpa.yaml

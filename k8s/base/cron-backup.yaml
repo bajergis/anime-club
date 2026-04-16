@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: anime-club-db-backup
+spec:
+  schedule: "0 3 * * *"   # daily at 3 AM UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: amazon/aws-cli:latest   # swap for rclone if not using S3
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  cp /data/anime-club.db /tmp/anime-club-${TIMESTAMP}.db
+                  aws s3 cp /tmp/anime-club-${TIMESTAMP}.db \
+                    s3://${S3_BUCKET}/backups/anime-club-${TIMESTAMP}.db \
+                    --region ${AWS_REGION}
+                  echo "Backup complete: anime-club-${TIMESTAMP}.db"
+              env:
+                - name: S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: anime-club-backup-secret
+                      key: S3_BUCKET
+                - name: AWS_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: anime-club-backup-secret
+                      key: AWS_REGION
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: anime-club-backup-secret
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: anime-club-backup-secret
+                      key: AWS_SECRET_ACCESS_KEY
+              volumeMounts:
+                - name: db-storage
+                  mountPath: /data
+                  readOnly: true
+          volumes:
+            - name: db-storage
+              persistentVolumeClaim:
+                claimName: anime-club-db-pvc
