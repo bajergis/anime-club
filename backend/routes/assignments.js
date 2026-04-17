@@ -22,7 +22,7 @@ router.get('/', (req, res) => {
   if (season_id)  { sql += ' AND r.season_id = ?';     params.push(season_id); }
   if (roll_id)    { sql += ' AND a.roll_id = ?';        params.push(roll_id); }
   if (member_id)  { sql += ' AND a.assignee_id = ?';    params.push(member_id); }
-  sql += ' ORDER BY r.roll_date DESC, a.id';
+  sql += ' ORDER BY s.id DESC, r.roll_number DESC, a.id ASC';
   res.json(db.prepare(sql).all(...params));
 });
 

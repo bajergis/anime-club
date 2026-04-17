@@ -1,14 +1,3 @@
-/**
- * seed.js — one-time import of Bois_Anime.xlsx history into SQLite
- * Run: node seed.js
- *
- * Maps the season sheets to normalized DB rows. The Excel format is:
- *   Col 0: week label (e.g. "1. Woche (17.11.2020)")
- *   Col 1: "Anime Title (assigner)" for member A
- *   Col 2: member A's rating
- *   Col 3/4: member B...  etc.
- */
-
 import Database from 'better-sqlite3';
 import xlsx from 'xlsx';
 import path from 'path';
