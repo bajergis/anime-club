@@ -105,7 +105,7 @@ npm install
 npm run dev           # starts on :5173, proxies /api → :3001
 ```
 
-### Kubernetes (local with kind)
+### Kubernetes (local with kind) #todo
 
 ```bash
 # Create cluster
