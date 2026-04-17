@@ -64,7 +64,7 @@ export default function Dashboard() {
   return (
     <div>
       {/* Header */}
-      <div className="season-banner" data-season="S4">
+      <div className="season-banner">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", marginBottom: 6 }}>
@@ -125,31 +125,58 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex flex-col gap-8">
-            {currentRoll?.length ? currentRoll.map(a => (
-              <div key={a.id} className="anime-card">
-                {a.anilist_data?.cover_image_medium
-                  ? <img className="anime-thumb" src={JSON.parse(a.anilist_data).cover_image_medium} alt="" />
-                  : <div className="anime-thumb" style={{ background: "var(--bg3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem" }}>番</div>
-                }
-                <div className="anime-info">
-                  <div className="anime-title">{a.anime_title}</div>
-                  <div className="anime-assigner mt-4">
-                    <span className="assigner-tag">{a.assignee_name}</span>
-                    <span className="text-muted"> ← assigned by </span>
-                    <span className="assigner-tag">{a.assigner_name}</span>
+            {currentRoll?.length ? currentRoll.map(a => {
+              const ani = a.anilist_data ? JSON.parse(a.anilist_data) : null;
+
+              return (
+                <div key={a.id} className="anime-card">
+                  {ani?.cover_image_medium ? (
+                    <img
+                      className="anime-thumb"
+                      src={ani.cover_image_medium}
+                      alt=""
+                    />
+                  ) : (
+                    <div
+                      className="anime-thumb"
+                      style={{
+                        background: "var(--bg3)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "1.5rem"
+                      }}
+                    >
+                      番
+                    </div>
+                  )}
+
+                  <div className="anime-info">
+                    <div className="anime-title">{a.anime_title}</div>
+                    <div className="anime-assigner mt-4">
+                      <span className="assigner-tag">{a.assignee_name}</span>
+                      <span className="text-muted"> ← assigned by </span>
+                      <span className="assigner-tag">{a.assigner_name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-8 mt-8">
+                      <StatusBadge status={a.status} />
+
+                      {a.episodes_watched != null && a.total_episodes && (
+                        <span
+                          className="text-muted"
+                          style={{ fontSize: "0.7rem", fontFamily: "var(--font-mono)" }}
+                        >
+                          {a.episodes_watched}/{a.total_episodes} ep
+                        </span>
+                      )}
+                    </div>
+
+                    {a.rating && <RatingBar value={a.rating} />}
                   </div>
-                  <div className="flex items-center gap-8 mt-8">
-                    <StatusBadge status={a.status} />
-                    {a.episodes_watched != null && a.total_episodes && (
-                      <span className="text-muted" style={{ fontSize: "0.7rem", fontFamily: "var(--font-mono)" }}>
-                        {a.episodes_watched}/{a.total_episodes} ep
-                      </span>
-                    )}
-                  </div>
-                  {a.rating && <RatingBar value={a.rating} />}
                 </div>
-              </div>
-            )) : (
+              );
+            }) : (
               <div className="card" style={{ textAlign: "center", padding: "32px" }}>
                 <div className="text-muted">No assignments yet this roll.</div>
               </div>

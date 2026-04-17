@@ -248,7 +248,7 @@ function BulkRefresh({ seasons }) {
       <h2 className="mb-8">Bulk AniList Refresh</h2>
       <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
         Fetches cover art, genres, episode counts and scores for all assignments that are missing AniList data.
-        Seeded data from the Excel file won't have images until you run this. Rate-limited to ~85 req/min.
+        Rate-limited to ~85 req/min.
       </div>
       <div className="flex gap-8 mb-16" style={{ alignItems: "flex-end" }}>
         <div>

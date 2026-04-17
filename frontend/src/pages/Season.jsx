@@ -47,7 +47,7 @@ useEffect(() => {
 
   return (
     <div>
-      <div className="season-banner" data-season={`S${id}`}>
+      <div className="season-banner">
         <div className="flex items-center justify-between">
           <div>
             <h1>{season.name}</h1>

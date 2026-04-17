@@ -325,7 +325,7 @@ export default function Roll() {
 
   return (
     <div>
-      <div className="season-banner" data-season={`R${rollMeta?.roll_number}`}>
+      <div className="season-banner">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", marginBottom: 4 }}>
