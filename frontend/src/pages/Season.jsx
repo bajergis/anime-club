@@ -15,6 +15,21 @@ export default function Season() {
   const [editingDates, setEditingDates] = useState(false);
   const [endedAt, setEndedAt] = useState("");
   const [savingDate, setSavingDate] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: 1 });
+
+function toggleSort(key) {
+  setSortConfig(prev => ({
+    key,
+    dir: prev.key === key ? -prev.dir : 1,
+  }));
+}
+
+const sortedAssignments = [...assignments].sort((a, b) => {
+  if (!sortConfig.key) return 0;
+  const av = a[sortConfig.key] ?? -Infinity;
+  const bv = b[sortConfig.key] ?? -Infinity;
+  return av < bv ? -sortConfig.dir : av > bv ? sortConfig.dir : 0;
+});
 
 useEffect(() => {
   Promise.all([
@@ -168,20 +183,31 @@ useEffect(() => {
       <div className="section-header">
         <h2>All Assignments</h2>
       </div>
-      <div className="card">
-        <table className="data-table">
+      <div className="card" style={{ overflowY: "auto", maxHeight: "600px" }}>
+        <table className="data-table assignments-sticky">
           <thead>
             <tr>
-              <th>Anime</th>
-              <th>Assignee</th>
-              <th>Assigner</th>
-              <th>Roll</th>
-              <th>Rating</th>
-              <th>Status</th>
+              {[
+                { label: "Anime", key: "anime_title" },
+                { label: "Assignee", key: "assignee_name" },
+                { label: "Assigner", key: "assigner_name" },
+                { label: "Roll", key: "roll_number" },
+                { label: "Rating", key: "rating" },
+                { label: "Status", key: "status" },
+              ].map(({ label, key }) => (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(key)}
+                  style={{ cursor: "pointer", userSelect: "none" }}
+                >
+                  {label}
+                  {sortConfig.key === key ? (sortConfig.dir === 1 ? " ▲" : " ▼") : " ↕"}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {assignments.map(a => (
+            {sortedAssignments.map(a => (
               <tr key={a.id}>
                 <td style={{ fontWeight: 500 }}>{a.anime_title}</td>
                 <td style={{ color: "var(--accent)" }}>{a.assignee_name}</td>
@@ -193,7 +219,7 @@ useEffect(() => {
                 </td>
                 <td className="text-mono">
                   {a.rating != null ? (
-                    <span style={{ color: a.rating >= 8 ? "var(--green)" : a.rating >= 6 ? "var(--text)" : "var(--red)" }}>
+                    <span style={{ color: a.rating >= 8 ? "var(--green)" : a.rating >= 5 ? "var(--text)" : "var(--red)" }}>
                       {a.rating}
                     </span>
                   ) : "—"}

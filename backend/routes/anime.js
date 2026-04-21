@@ -15,4 +15,19 @@ router.get('/search', async (req, res) => {
   }
 });
 
+router.post("/anilist-proxy", async (req, res) => {
+  try {
+    const response = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    console.log("AniList proxy response:", JSON.stringify(data));
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

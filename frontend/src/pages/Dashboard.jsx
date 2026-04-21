@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [currentRollId, setCurrentRollId] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [avatars, setAvatars] = useState({});
 
   useEffect(() => {
     Promise.all([
@@ -42,10 +43,31 @@ export default function Dashboard() {
       fetch(`${API}/seasons/active`).then(r => r.ok ? r.json() : null),
       fetch(`${API}/members`).then(r => r.json()),
       fetch(`${API}/seasons`).then(r => r.json()),
-    ]).then(([ov, season, mems, seasons]) => {
+    ]).then(async ([ov, season, mems, seasons]) => {
       setOverview(ov);
       setActiveSeason(season);
       setMembers(mems);
+
+      // fetch all anilist avatars
+      const avatarMap = {};
+      await Promise.all(
+        mems
+          .filter(m => m.anilist_username)
+          .map(m =>
+            fetch(`${API}/anime/anilist-proxy`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: `query($name: String) { User(name: $name) { avatar { large } } }`,
+                variables: { name: m.anilist_username },
+              }),
+            })
+              .then(r => r.json())
+              .then(d => { avatarMap[m.id] = d.data?.User?.avatar?.large; })
+              .catch(() => {})
+          )
+      );
+      setAvatars(avatarMap);
       setAllSeasons(seasons);
       setLoading(false);
 
@@ -193,7 +215,11 @@ export default function Dashboard() {
             {members.map(m => (
               <Link key={m.id} to={`/member/${m.id}`} style={{ textDecoration: "none" }}>
                 <div className="anime-card" style={{ alignItems: "center" }}>
-                  <MemberInitial name={m.name} />
+                  {avatars[m.id]
+                    ? <img src={avatars[m.id]} alt={m.name}
+                        style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                    : <MemberInitial name={m.name} />
+                  }
                   <div className="anime-info">
                     <div className="anime-title">{m.name}</div>
                     {m.anilist_username && (

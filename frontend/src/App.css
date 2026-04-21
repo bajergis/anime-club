@@ -255,3 +255,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+
+.assignments-sticky thead th {
+  position: sticky;
+  top: -30px;
+  z-index: 1;
+  background: var(--bg2);
+  box-shadow: 0 1px 0 var(--border);
+}
