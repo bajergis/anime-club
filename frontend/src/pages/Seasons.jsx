@@ -206,6 +206,7 @@ export default function Seasons() {
   const [seasons, setSeasons] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentRollComplete, setCurrentRollComplete] = useState(true);
   const [showNewSeason, setShowNewSeason] = useState(false);
   const navigate = useNavigate();
 
@@ -213,9 +214,20 @@ export default function Seasons() {
     Promise.all([
       fetch(`${API}/seasons`).then(r => r.json()),
       fetch(`${API}/members`).then(r => r.json()),
-    ]).then(([s, m]) => {
+      fetch(`${API}/seasons/active`).then(r => r.ok ? r.json() : null),
+    ]).then(([s, m, active]) => {
       setSeasons(s);
       setMembers(m);
+
+      if (active?.rolls?.length) {
+          const lastRoll = active.rolls[active.rolls.length - 1];
+          const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`).then(r => r.json());
+          const allDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
+          setCurrentRollComplete(allDone);
+      } else {
+          setCurrentRollComplete(true); // no rolls so allow generating
+      }
+
       setLoading(false);
     });
   }
@@ -245,11 +257,17 @@ export default function Seasons() {
           <div className="text-muted mb-8" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
             ACTIVE SEASON — {activeSeason.name}
           </div>
-          <NewRollPanel
-            seasonId={activeSeason.id}
-            members={members}
-            onRollCreated={(rollId) => navigate(`/roll/${rollId}`)}
-          />
+          {currentRollComplete ? (
+            <NewRollPanel
+              seasonId={activeSeason.id}
+              members={members}
+              onRollCreated={(rollId) => navigate(`/roll/${rollId}`)}
+            />
+          ) : (
+            <div className="card" style={{ textAlign: "center", padding: 32 }}>
+              <div className="text-muted">Current roll must be completed or dropped before generating a new one.</div>
+            </div>
+          )}
         </div>
       )}
 

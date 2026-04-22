@@ -18,7 +18,7 @@ function Nav() {
     { to: "/", label: "Dashboard", icon: "⊞" },
     { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/stats", label: "Stats", icon: "◈" },
-    { to: "/admin", label: "Admin", icon: "⚙" },
+    ...(member?.id === "jsn" ? [{ to: "/admin", label: "Admin", icon: "⚙" }] : []),
   ];
   return (
     <nav className="sidebar">
