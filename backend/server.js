@@ -46,7 +46,10 @@ app.get("/admin/db-check", (req, res) => {
   try {
     const files = readdirSync("/app/data");
     const stat = statSync("/app/data/anime-club.db");
-    res.json({ files, size: stat.size, modified: stat.mtime });
+    // also check if it's a real volume by writing a test file
+    const { writeFileSync } = await import("fs");
+    writeFileSync("/app/data/test.txt", "hello");
+    res.json({ files, size: stat.size, modified: stat.mtime, volumeWritable: true });
   } catch (e) {
     res.json({ error: e.message });
   }
