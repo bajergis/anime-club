@@ -67,7 +67,11 @@ app.get("/admin/db-contents", (req, res) => {
   const members = db.prepare("SELECT * FROM members").all();
   const seasons = db.prepare("SELECT * FROM seasons").all();
   const assignments = db.prepare("SELECT COUNT(*) as count FROM assignments").get();
-  res.json({ members, seasons, assignmentCount: assignments.count });
+  const dbPath = process.env.NODE_ENV === "production"
+    ? "/app/data/anime-club.db"
+    : "./data/anime-club.db";
+  const stat = statSync(dbPath);
+  res.json({ members, seasons, assignmentCount: assignments.count, dbSize: stat.size, dbModified: stat.mtime });
 });
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
