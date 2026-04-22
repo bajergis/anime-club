@@ -15,6 +15,7 @@ import authRouter from './routes/auth.js';
 import { db } from './db.js';
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3001;
 
 const DB_PATH = process.env.NODE_ENV === "production"
@@ -35,6 +36,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
   }
 }));
