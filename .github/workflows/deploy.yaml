@@ -98,38 +98,38 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ── Deploy to Kubernetes ──────────────────────────────────────
-  deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Configure kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-
-      - name: Pin image tags in prod overlay
-        run: |
-          API_SHA=${{ needs.build.outputs.api-tag }}
-          FE_SHA=${{ needs.build.outputs.fe-tag }}
-          cd k8s/overlays/prod
-          # kustomize edit set image updates the tag in kustomization.yaml
-          kustomize edit set image \
-            ghcr.io/${{ env.REPO }}/anime-club-api:${API_SHA} \
-            ghcr.io/${{ env.REPO }}/anime-club-frontend:${FE_SHA}
-
-      - name: Apply manifests
-        run: |
-          kubectl apply -k k8s/overlays/prod
-
-      - name: Wait for rollout
-        run: |
-          kubectl rollout status deployment/anime-club-api -n anime-club --timeout=120s
-          kubectl rollout status deployment/anime-club-frontend -n anime-club --timeout=120s
+#  deploy:
+#    needs: build
+#    if: github.ref == 'refs/heads/main'
+#    runs-on: ubuntu-latest
+#    environment: production
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Set up kubectl
+#        uses: azure/setup-kubectl@v3
+#
+#      - name: Configure kubeconfig
+#        run: |
+#          mkdir -p ~/.kube
+#          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+#
+#      - name: Pin image tags in prod overlay
+#        run: |
+#          API_SHA=${{ needs.build.outputs.api-tag }}
+#          FE_SHA=${{ needs.build.outputs.fe-tag }}
+#          cd k8s/overlays/prod
+#          # kustomize edit set image updates the tag in kustomization.yaml
+#          kustomize edit set image \
+#            ghcr.io/${{ env.REPO }}/anime-club-api:${API_SHA} \
+#            ghcr.io/${{ env.REPO }}/anime-club-frontend:${FE_SHA}
+#
+#      - name: Apply manifests
+#        run: |
+#          kubectl apply -k k8s/overlays/prod
+#
+#      - name: Wait for rollout
+#        run: |
+#          kubectl rollout status deployment/anime-club-api -n anime-club --timeout=120s
+#          kubectl rollout status deployment/anime-club-frontend -n anime-club --timeout=120s
