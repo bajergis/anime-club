@@ -82,6 +82,7 @@ router.get("/callback", async (req, res) => {
   const member = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
   req.session.memberId = member.id;
   req.session.memberName = member.name;
+  console.log("Redirecting to:", process.env.FRONTEND_URL);
   res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
 });
 
