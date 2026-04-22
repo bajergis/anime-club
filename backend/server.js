@@ -11,6 +11,7 @@ import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
+import { readdirSync, statSync } from "fs";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +40,18 @@ app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+app.get("/admin/debug-fs", (req, res) => {
+  try {
+    const files = readdirSync("/app/data").map(f => {
+      const s = statSync(`/app/data/${f}`);
+      return { name: f, size: s.size, modified: s.mtime };
+    });
+    res.json({ files, cwd: process.cwd() });
+  } catch (err) {
+    res.json({ error: err.message, cwd: process.cwd() });
+  }
+});
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
