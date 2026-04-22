@@ -11,6 +11,8 @@ import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
+import { statSync, readdirSync, createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -40,8 +42,6 @@ app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-import { statSync, readdirSync } from "fs";
-
 app.get("/admin/db-check", (req, res) => {
   try {
     const files = readdirSync("/app/data");
@@ -51,7 +51,15 @@ app.get("/admin/db-check", (req, res) => {
     res.json({ error: e.message });
   }
 });
-//change
+app.put("/admin/upload-db", async (req, res) => {
+  try {
+    const dest = createWriteStream("/app/data/anime-club.db");
+    await pipeline(req, dest);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
