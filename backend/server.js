@@ -60,6 +60,12 @@ app.put("/admin/upload-db", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+app.get("/admin/db-contents", (req, res) => {
+  const members = db.prepare("SELECT * FROM members").all();
+  const seasons = db.prepare("SELECT * FROM seasons").all();
+  const assignments = db.prepare("SELECT COUNT(*) as count FROM assignments").get();
+  res.json({ members, seasons, assignmentCount: assignments.count });
+});
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
