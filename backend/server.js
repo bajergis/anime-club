@@ -11,6 +11,8 @@ import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +45,12 @@ app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().to
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+app.put("/admin/upload-db", async (req, res) => {
+  const dest = createWriteStream("/app/data/anime-club.db");
+  await pipeline(req, dest);
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => console.log(`API running on :${PORT}`));
