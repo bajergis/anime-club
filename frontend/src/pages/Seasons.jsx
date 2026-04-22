@@ -210,7 +210,7 @@ export default function Seasons() {
   const [showNewSeason, setShowNewSeason] = useState(false);
   const navigate = useNavigate();
 
-  function load() {
+  async function load() {
     Promise.all([
       fetch(`${API}/seasons`).then(r => r.json()),
       fetch(`${API}/members`).then(r => r.json()),
