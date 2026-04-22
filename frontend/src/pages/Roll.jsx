@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useAuth } from "../AuthContext";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
+const STATUSES = ["pending", "watching", "completed", "dropped", "hiatus"];
 
 const STATUS_MAP = {
   CURRENT: "watching",
@@ -47,7 +50,30 @@ async function syncAniListProgress(assignments, members) {
   return updates.filter(Boolean);
 }
 
-function AssignmentCard({ assignment: a }) {
+function AssignmentCard({ assignment: initialA, onUpdate }) {
+  const { member } = useAuth();
+  const [a, setA] = useState(initialA);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    rating: initialA.rating ?? "",
+    episodes_watched: initialA.episodes_watched ?? "",
+    status: initialA.status ?? "pending",
+    notes: initialA.notes ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  // keep local state in sync if parent updates (e.g. after AniList sync)
+  useEffect(() => {
+    setA(initialA);
+    setDraft(d => ({
+      ...d,
+      episodes_watched: initialA.episodes_watched ?? "",
+      status: initialA.status ?? "pending",
+    }));
+  }, [initialA]);
+
+  const isAssignee = member?.name === a.assignee_name;
+
   const aniData = a.anilist_data
     ? (() => { try { return JSON.parse(a.anilist_data); } catch { return null; } })()
     : null;
@@ -60,6 +86,30 @@ function AssignmentCard({ assignment: a }) {
     : a.rating >= 7 ? "var(--accent2)"
     : a.rating >= 5 ? "var(--text)"
     : a.rating ? "var(--red)" : "var(--text2)";
+
+  async function save() {
+    setSaving(true);
+    await fetch(`${API}/assignments/${a.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: draft.rating !== "" ? Number(draft.rating) : null,
+        episodes_watched: draft.episodes_watched !== "" ? Number(draft.episodes_watched) : null,
+        status: draft.status,
+        notes: draft.notes || null,
+      }),
+    });
+    const updated = {
+      ...a,
+      ...draft,
+      rating: draft.rating !== "" ? Number(draft.rating) : null,
+      episodes_watched: draft.episodes_watched !== "" ? Number(draft.episodes_watched) : null,
+    };
+    setA(updated);
+    setSaving(false);
+    setEditing(false);
+    onUpdate?.(updated);
+  }
 
   return (
     <div className="card" style={{ borderLeft: `3px solid ${aniData?.cover_color || "var(--border)"}` }}>
@@ -80,9 +130,17 @@ function AssignmentCard({ assignment: a }) {
 
         {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: "1rem", color: "var(--text)" }}>
-            {aniData?.title_english || aniData?.title_romaji || a.anime_title}
+          <div className="flex items-center justify-between">
+            <div style={{ fontWeight: 600, fontSize: "1rem", color: "var(--text)" }}>
+              {aniData?.title_english || aniData?.title_romaji || a.anime_title}
+            </div>
+            {isAssignee && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(!editing)}>
+                {editing ? "Cancel" : "Edit"}
+              </button>
+            )}
           </div>
+
           {aniData && aniData.title_romaji !== (aniData.title_english || aniData.title_romaji) && (
             <div className="text-muted" style={{ fontSize: "0.75rem" }}>{aniData.title_romaji}</div>
           )}
@@ -137,6 +195,59 @@ function AssignmentCard({ assignment: a }) {
           )}
         </div>
       </div>
+
+      {/* Edit form — only visible to assignee */}
+      {editing && (
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+          <div className="grid-4" style={{ gap: 12 }}>
+            <div>
+              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+                Rating (0–10)
+              </label>
+              <input
+                type="number" min="0" max="10" step="0.5"
+                value={draft.rating}
+                onChange={e => setDraft(d => ({ ...d, rating: e.target.value }))}
+                placeholder="—"
+              />
+            </div>
+            <div>
+              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+                Episodes Watched
+              </label>
+              <input
+                type="number" min="0"
+                value={draft.episodes_watched}
+                onChange={e => setDraft(d => ({ ...d, episodes_watched: e.target.value }))}
+                placeholder="—"
+              />
+            </div>
+            <div>
+              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+                Status
+              </label>
+              <select value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value }))}>
+                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button className="btn btn-primary" style={{ width: "100%" }} onClick={save} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+              Notes
+            </label>
+            <input
+              value={draft.notes}
+              onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))}
+              placeholder="Any thoughts..."
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -164,7 +275,6 @@ export default function Roll() {
       }
       setLoading(false);
 
-      // auto-sync from AniList on load
       setSyncing(true);
       const updates = await syncAniListProgress(data, members);
       if (updates.length) {
@@ -210,6 +320,10 @@ export default function Roll() {
     setLastSynced(new Date());
   }
 
+  function handleUpdate(updated) {
+    setAssignments(prev => prev.map(a => a.id === updated.id ? { ...a, ...updated } : a));
+  }
+
   if (loading) return <div className="loading">Loading roll...</div>;
 
   const rated = assignments.filter(a => a.rating != null);
@@ -241,11 +355,7 @@ export default function Roll() {
               <div className="stat-label">Completed</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={manualSync}
-                disabled={syncing}
-              >
+              <button className="btn btn-ghost btn-sm" onClick={manualSync} disabled={syncing}>
                 {syncing ? "↻ syncing..." : "↻ Sync AniList"}
               </button>
               {lastSynced && !syncing && (
@@ -260,7 +370,7 @@ export default function Roll() {
 
       <div className="flex flex-col gap-16">
         {assignments.map(a => (
-          <AssignmentCard key={a.id} assignment={a} />
+          <AssignmentCard key={a.id} assignment={a} onUpdate={handleUpdate} />
         ))}
         {!assignments.length && (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>

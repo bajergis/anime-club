@@ -35,5 +35,28 @@ patches:
       kind: ConfigMap
       name: anime-club-config
 
+  - patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+    target:
+      kind: Deployment
+      name: anime-club-api
+  - patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+    target:
+      kind: Deployment
+      name: anime-club-frontend
+
+images:
+  - name: ghcr.io/youruser/anime-club-api:latest
+    newName: anime-club-api
+    newTag: local
+  - name: ghcr.io/youruser/anime-club-frontend:latest
+    newName: anime-club-frontend
+    newTag: local
+
 commonLabels:
   env: dev

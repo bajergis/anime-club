@@ -8,9 +8,12 @@ import Roll from "./pages/Roll";
 import Stats from "./pages/Stats";
 import Admin from "./pages/Admin";
 import "./App.css";
+import { useAuth } from "./AuthContext";
 
 function Nav() {
   const loc = useLocation();
+  const { member, logout } = useAuth();
+  if (member === undefined) return null;
   const links = [
     { to: "/", label: "Dashboard", icon: "⊞" },
     { to: "/seasons", label: "Seasons", icon: "◉" },
@@ -33,9 +36,29 @@ function Nav() {
           </li>
         ))}
       </ul>
-      <div className="sidebar-footer">
-        <span className="version">S4 · 2026</span>
-      </div>
+        <div className="sidebar-footer">
+          {member ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {member.avatar_url && (
+                <img src={member.avatar_url} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 600, truncate: true }}>{member.name}</div>
+                <button
+                  onClick={logout}
+                  style={{ fontSize: "0.7rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  logout
+                </button>
+              </div>
+            </div>
+          ) : (
+            <a href="http://localhost:3001/auth/anilist" className="btn btn-primary btn-sm" style={{ width: "100%", textAlign: "center" }}>
+              Login with AniList
+            </a>
+          )}
+          <span className="version" style={{ marginTop: 8, display: "block" }}>S4 · 2026</span>
+        </div>
     </nav>
   );
 }
