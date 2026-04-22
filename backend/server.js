@@ -11,7 +11,7 @@ import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
-import { statSync, readdirSync, createWriteStream } from "fs";
+import { statSync, readdirSync, writeFileSync } from "fs";
 import { pipeline } from "stream/promises";
 
 const app = express();
@@ -46,14 +46,14 @@ app.get("/admin/db-check", (req, res) => {
   try {
     const files = readdirSync("/app/data");
     const stat = statSync("/app/data/anime-club.db");
-    // also check if it's a real volume by writing a test file
-    const { writeFileSync } = await import("fs");
     writeFileSync("/app/data/test.txt", "hello");
-    res.json({ files, size: stat.size, modified: stat.mtime, volumeWritable: true });
+    const testStat = statSync("/app/data/test.txt");
+    res.json({ files, size: stat.size, modified: stat.mtime, volumeWritable: testStat.size > 0 });
   } catch (e) {
     res.json({ error: e.message });
   }
 });
+
 app.put("/admin/upload-db", async (req, res) => {
   try {
     const dest = createWriteStream("/app/data/anime-club.db");
