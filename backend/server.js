@@ -11,7 +11,7 @@ import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
-import { statSync, readdirSync, writeFileSync } from "fs";
+import { statSync, readdirSync, writeFileSync, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
 
 const app = express();
