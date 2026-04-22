@@ -12,7 +12,7 @@ import { useAuth } from "./AuthContext";
 
 function Nav() {
   const loc = useLocation();
-  const { member, logout } = useAuth();
+  const { member, logout, authBase } = useAuth();
   if (member === undefined) return null;
   const links = [
     { to: "/", label: "Dashboard", icon: "⊞" },
@@ -53,7 +53,7 @@ function Nav() {
               </div>
             </div>
           ) : (
-            <a href="http://localhost:3001/auth/anilist" className="btn btn-primary btn-sm" style={{ width: "100%", textAlign: "center" }}>
+            <a href={`${authBase}/auth/anilist`} className="btn btn-primary btn-sm" style={{ width: "100%", textAlign: "center" }}>
               Login with AniList
             </a>
           )}
