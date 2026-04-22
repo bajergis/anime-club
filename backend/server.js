@@ -51,7 +51,7 @@ app.get("/admin/db-check", (req, res) => {
     res.json({ error: e.message });
   }
 });
-
+//change
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
