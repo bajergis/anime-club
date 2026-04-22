@@ -40,6 +40,18 @@ app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+import { statSync, readdirSync } from "fs";
+
+app.get("/admin/db-check", (req, res) => {
+  try {
+    const files = readdirSync("/app/data");
+    const stat = statSync("/app/data/anime-club.db");
+    res.json({ files, size: stat.size, modified: stat.mtime });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
