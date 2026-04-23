@@ -56,7 +56,7 @@ function NewSeasonForm({ onCreated }) {
 function NewRollPanel({ seasonId, members, onRollCreated }) {
   const [selectedMembers, setSelectedMembers] = useState(members.map(m => m.id));
   const [rollDate, setRollDate] = useState(new Date().toISOString().split("T")[0]);
-  const [result, setResult] = useState(null);  // derangement result
+  const [result, setResult] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [animeTitles, setAnimeTitles] = useState({});  // assigneeId → title
   const [submitting, setSubmitting] = useState(false);
@@ -87,10 +87,8 @@ function NewRollPanel({ seasonId, members, onRollCreated }) {
 
   async function submitAssignments() {
     if (!result) return;
-    // For each assignment in the derangement: assigner → assignee
-    // derangement is { assignerId: assigneeId }
     const { roll_id, derangement } = result;
-    const entries = Object.entries(derangement); // [assignerId, assigneeId]
+    const entries = Object.entries(derangement);
     setSubmitting(true);
     for (const [assignerId, assigneeId] of entries) {
       const title = animeTitles[assigneeId];
@@ -225,7 +223,7 @@ export default function Seasons() {
           const allDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
           setCurrentRollComplete(allDone);
       } else {
-          setCurrentRollComplete(true); // no rolls so allow generating
+          setCurrentRollComplete(true);
       }
 
       setLoading(false);

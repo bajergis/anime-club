@@ -315,15 +315,12 @@ function EntryEditor({ members, seasons }) {
   }
 
   async function linkAndRefresh(assignmentId, anilistId) {
-    // patch the anilist_id
     await fetch(`${API}/assignments/${assignmentId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ anilist_id: anilistId }),
     });
-    // trigger refresh to pull metadata
     const fresh = await fetch(`${API}/assignments/${assignmentId}/refresh-anilist`, { method: "POST" }).then(r => r.json());
-    // update local state
     setAssignments(prev => prev.map(a => a.id === assignmentId
       ? { ...a, anime_title: fresh.title_english || fresh.title_romaji || a.anime_title, anilist_id: anilistId }
       : a

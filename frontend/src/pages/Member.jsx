@@ -15,7 +15,6 @@ export default function Member() {
       fetch(`${API}/members`).then(r => r.json()),
       fetch(`${API}/assignments?member_id=${id}`).then(r => r.json()),
     ]).then(([members, assigns]) => {
-      // fix: parseInt so string id from useParams matches numeric db id
       const found = members.find(m => m.id === id);
       setMember(found);
       setAssignments(assigns);
@@ -37,7 +36,7 @@ export default function Member() {
         })
           .then(r => r.json())
           .then(d => setAnilistProfile(d.data?.User))
-          .catch(() => {}); // silently fail — fallback to initial
+          .catch(() => {});
       }
     });
   }, [id]);

@@ -1,7 +1,3 @@
-/**
- * Generates a derangement (permutation with no fixed points) for a list of members.
- * Used each roll to assign who picks for whom — no one picks for themselves.
- */
 export function generateDerangement(members) {
   const maxAttempts = 1000;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

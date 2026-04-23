@@ -10,11 +10,9 @@ const XLS_PATH = path.join(__dirname, '..', 'Bois_Anime.xlsx');
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-// Ensure data dir exists
 import fs from 'fs';
 fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
 
-// Re-run schema init
 const { db } = await import('./db.js');
 
 db.exec("PRAGMA foreign_keys = ON;");
@@ -38,12 +36,8 @@ const upsertMember = db.prepare(
 for (const m of MEMBERS) upsertMember.run(m.id, m.name);
 console.log('✓ Members seeded');
 
-// ── Load workbook ──────────────────────────────────────────────
 const wb = xlsx.readFile(XLS_PATH);
 
-// Season sheets to import, with the column layout
-// Each entry: { sheetName, seasonName, startDate, memberCols }
-// memberCols: array of { memberId, titleCol, ratingCol }
 const SEASON_SHEETS = [
   {
     sheet: 'Season 1', name: 'Season 1', start: '2020-11-17',
@@ -104,7 +98,6 @@ const insertAssignment = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?)
 `);
 
-/** Parse "Anime Title (assignerName)" → { title, assignerId } */
 function parseTitleCell(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const match = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);

@@ -1,14 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-// VITE_API_URL is something like https://anime-rolling-backend.up.railway.app/api
-// Auth routes live at /auth (not /api/auth), so we strip the /api suffix
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 const BASE = API.replace(/\/api$/, "");
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [member, setMember] = useState(undefined); // undefined = still loading
+  const [member, setMember] = useState(undefined);
 
   useEffect(() => {
     fetch(`${BASE}/auth/me`, { credentials: "include" })

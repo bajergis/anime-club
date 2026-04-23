@@ -48,7 +48,6 @@ export default function Dashboard() {
       setActiveSeason(season);
       setMembers(mems);
 
-      // fetch all anilist avatars
       const avatarMap = {};
       await Promise.all(
         mems

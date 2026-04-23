@@ -264,3 +264,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   background: var(--bg2);
   box-shadow: 0 1px 0 var(--border);
 }
+
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  display: block;
+}

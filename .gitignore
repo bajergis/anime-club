@@ -147,5 +147,6 @@ Thumbs.db
 *.iml
 docker-data/
 k8s/generated/
+seed.js
 
 

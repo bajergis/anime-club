@@ -9,6 +9,7 @@ import Stats from "./pages/Stats";
 import Admin from "./pages/Admin";
 import "./App.css";
 import { useAuth } from "./AuthContext";
+import logo from "./assets/icon.png"
 
 function Nav() {
   const loc = useLocation();
@@ -23,7 +24,7 @@ function Nav() {
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <span className="logo-mark">番</span>
+        <img src="/icon.png" alt="番" className="logo-mark" />
         <span className="logo-text">Bois<br/>Anime</span>
       </div>
       <ul className="nav-links">

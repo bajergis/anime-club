@@ -62,7 +62,6 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
   });
   const [saving, setSaving] = useState(false);
 
-  // keep local state in sync if parent updates (e.g. after AniList sync)
   useEffect(() => {
     setA(initialA);
     setDraft(d => ({
