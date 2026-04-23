@@ -107,10 +107,11 @@ router.post('/:id/refresh-anilist', async (req, res) => {
       media = results[0];
     }
     const formatted = formatAnimeData(media);
+    const correctedTitle = formatted.title_english || formatted.title_romaji || row.anime_title;
     db.prepare(`
-      UPDATE assignments SET anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
+      UPDATE assignments SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
+    `).run(correctedTitle, formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
     res.json(formatted);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -153,10 +154,11 @@ router.post('/bulk-refresh-anilist', async (req, res) => {
         media = results[0];
       }
       const formatted = formatAnimeData(media);
+      const correctedTitle = formatted.title_english || formatted.title_romaji || row.anime_title;
       db.prepare(`
-        UPDATE assignments SET anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
+        UPDATE assignments SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
+      `).run(correctedTitle, formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
       updated++;
       send({ type: 'ok', title: row.anime_title, updated, remaining: rows.length - updated - skipped });
     } catch (e) {
