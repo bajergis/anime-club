@@ -48,6 +48,26 @@ app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
+import Database from 'better-sqlite3';
+
+app.put("/admin/upload-db", async (req, res) => {
+  try {
+    db.close();
+    const dest = createWriteStream(DB_PATH);
+    await pipeline(req, dest);
+    const fresh = new Database(DB_PATH);
+    fresh.pragma('journal_mode = WAL');
+    fresh.pragma('foreign_keys = ON');
+    const members = fresh.prepare("SELECT * FROM members").all();
+    fresh.close();
+    res.json({ ok: true, memberCount: members.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // ── Error handler ─────────────────────────────────────────────────────────────
