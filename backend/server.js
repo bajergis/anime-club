@@ -4,9 +4,6 @@ import "dotenv/config";
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import Database from 'better-sqlite3';
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
 import assignmentsRouter from './routes/assignments.js';
 import animeRouter from './routes/anime.js';
 import membersRouter from './routes/members.js';
@@ -50,23 +47,6 @@ app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-// ── Temp: upload DB (remove after use) ───────────────────────────────────────
-app.put("/admin/upload-db", async (req, res) => {
-  try {
-    db.close();
-    const dest = createWriteStream(DB_PATH);
-    await pipeline(req, dest);
-    const fresh = new Database(DB_PATH);
-    fresh.pragma('journal_mode = WAL');
-    fresh.pragma('foreign_keys = ON');
-    const members = fresh.prepare("SELECT * FROM members").all();
-    fresh.close();
-    res.json({ ok: true, memberCount: members.length });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
