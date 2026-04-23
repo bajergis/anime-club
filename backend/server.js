@@ -14,7 +14,9 @@ import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
 import { db } from './db.js';
+import connectSqlite3 from "connect-sqlite3";
 
+const SQLiteStore = connectSqlite3(session);
 const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3001;
@@ -31,6 +33,10 @@ app.use(cors({
 app.use(express.json());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
 app.use(session({
+  store: new SQLiteStore({
+    db: "sessions.db",
+    dir: process.env.NODE_ENV === "production" ? "/app/data" : "./data",
+  }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -50,23 +56,6 @@ app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-// ── Temp: upload DB (remove after use) ───────────────────────────────────────
-app.put("/admin/upload-db", async (req, res) => {
-  try {
-    db.close();
-    const dest = createWriteStream(DB_PATH);
-    await pipeline(req, dest);
-    const fresh = new Database(DB_PATH);
-    fresh.pragma('journal_mode = WAL');
-    fresh.pragma('foreign_keys = ON');
-    const members = fresh.prepare("SELECT * FROM members").all();
-    fresh.close();
-    res.json({ ok: true, memberCount: members.length });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
