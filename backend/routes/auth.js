@@ -83,6 +83,13 @@ router.get("/callback", async (req, res) => {
   req.session.memberId = member.id;
   req.session.memberName = member.name;
   console.log("Redirecting to:", process.env.FRONTEND_URL);
+  console.log("Token exchange payload:", {
+    grant_type: "authorization_code",
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET ? "set" : "missing",
+    redirect_uri: REDIRECT_URI,
+    code: code?.slice(0, 10) + "...",
+  });
   res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
 });
 
