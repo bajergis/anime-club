@@ -24,7 +24,7 @@ function Nav() {
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <img src="/icon.png" alt="番" className="logo-mark" />
+        <img src={logo} alt="番" className="logo-mark" />
         <span className="logo-text">Bois<br/>Anime</span>
       </div>
       <ul className="nav-links">
