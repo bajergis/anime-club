@@ -73,10 +73,3 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_assignments_assignee ON assignments(assignee_id);
   CREATE INDEX IF NOT EXISTS idx_rolls_season ON rolls(season_id);
 `);
-
-// Migrations — safe to run on every startup
-try {
-  db.prepare(`ALTER TABLE seasons ADD COLUMN roll_count INTEGER`).run();
-  console.log("Migration applied: seasons.roll_count added");
-} catch {
-}

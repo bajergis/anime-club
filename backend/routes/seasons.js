@@ -6,7 +6,13 @@ const router = Router();
 
 // GET /api/seasons
 router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM seasons ORDER BY id DESC').all());
+  res.json(db.prepare(`
+    SELECT s.*, COUNT(r.id) AS rolls_completed
+    FROM seasons s
+    LEFT JOIN rolls r ON r.season_id = s.id
+    GROUP BY s.id
+    ORDER BY s.id DESC
+  `).all());
 });
 
 // GET /api/seasons/active

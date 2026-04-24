@@ -286,7 +286,7 @@ export default function Seasons() {
 
   // Roll progress label for the active season header, e.g. "Roll 2 / 4"
   const rollProgressLabel = activeSeason && activeSeason.roll_count
-    ? `Roll ${activeSeason.rolls?.length ?? 0} / ${activeSeason.roll_count}`
+    ? `Roll ${activeSeason.rolls_completed ?? 0} / ${activeSeason.roll_count}`
     : null;
 
   if (loading) return <div className="loading">Loading...</div>;
@@ -386,7 +386,7 @@ export default function Seasons() {
                 <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{s.started_at}</td>
                 <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{s.ended_at || "—"}</td>
                 <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>
-                  {s.rolls?.length ?? 0}{s.roll_count ? ` / ${s.roll_count}` : ""}
+                  {s.rolls_completed ?? 0}{s.roll_count ? ` / ${s.roll_count}` : ""}
                 </td>
                 <td>
                   {s.is_active
