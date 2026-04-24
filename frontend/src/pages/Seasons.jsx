@@ -6,18 +6,20 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 function NewSeasonForm({ onCreated }) {
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [rollCount, setRollCount] = useState(4);
   const [saving, setSaving] = useState(false);
 
   async function submit() {
-    if (!name.trim()) return;
+    if (!name.trim() || rollCount < 1) return;
     setSaving(true);
     await fetch(`${API}/seasons`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, started_at: date }),
+      body: JSON.stringify({ name, started_at: date, roll_count: rollCount }),
     });
     setSaving(false);
     setName("");
+    setRollCount(4);
     onCreated();
   }
 
@@ -42,13 +44,48 @@ function NewSeasonForm({ onCreated }) {
           </label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} />
         </div>
-        <button className="btn btn-primary" onClick={submit} disabled={saving || !name.trim()}>
+        <div>
+          <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+            Number of Rolls
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={rollCount}
+            onChange={e => setRollCount(Math.max(1, parseInt(e.target.value) || 1))}
+            style={{ width: "100%" }}
+          />
+        </div>
+      </div>
+      <div className="flex gap-8 mt-16" style={{ alignItems: "center" }}>
+        <button className="btn btn-primary" onClick={submit} disabled={saving || !name.trim() || rollCount < 1}>
           {saving ? "Creating..." : "Create Season"}
         </button>
+        <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+          Creating a new season will deactivate the current active season.
+        </div>
       </div>
-      <div className="text-muted mt-8" style={{ fontSize: "0.75rem" }}>
-        Creating a new season will deactivate the current active season.
+    </div>
+  );
+}
+
+function SeasonCompleteBanner({ onStartNewSeason }) {
+  return (
+    <div className="card mb-24" style={{
+      textAlign: "center",
+      padding: "40px 32px",
+      border: "1px solid var(--accent)",
+      background: "linear-gradient(135deg, var(--bg2) 0%, var(--bg3) 100%)",
+    }}>
+      <div style={{ fontSize: "2rem", marginBottom: 12 }}>🎉</div>
+      <h2 style={{ marginBottom: 8 }}>Season Complete!</h2>
+      <div className="text-muted mb-24" style={{ fontSize: "0.875rem" }}>
+        All rolls for this season have been finished. Ready to start a new one?
       </div>
+      <button className="btn btn-primary" onClick={onStartNewSeason}>
+        + Start New Season
+      </button>
     </div>
   );
 }
@@ -58,7 +95,7 @@ function NewRollPanel({ seasonId, members, onRollCreated }) {
   const [rollDate, setRollDate] = useState(new Date().toISOString().split("T")[0]);
   const [result, setResult] = useState(null);
   const [rolling, setRolling] = useState(false);
-  const [animeTitles, setAnimeTitles] = useState({});  // assigneeId → title
+  const [animeTitles, setAnimeTitles] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -200,11 +237,33 @@ function NewRollPanel({ seasonId, members, onRollCreated }) {
   );
 }
 
+// Determines the state of the active season's rolls:
+//   "in_progress"    — current roll not yet finished
+//   "ready_for_roll" — last roll done, season has rolls remaining
+//   "season_complete" — all rolls for the season are done
+async function getSeasonRollState(active) {
+  if (!active) return null;
+
+  const rollCount = active.roll_count ?? Infinity; // fall back gracefully if field missing
+  const completedRolls = active.rolls ?? [];
+
+  if (completedRolls.length === 0) return "ready_for_roll";
+
+  const lastRoll = completedRolls[completedRolls.length - 1];
+  const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`).then(r => r.json());
+  const lastRollDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
+
+  if (!lastRollDone) return "in_progress";
+  if (completedRolls.length >= rollCount) return "season_complete";
+  return "ready_for_roll";
+}
+
 export default function Seasons() {
   const [seasons, setSeasons] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentRollComplete, setCurrentRollComplete] = useState(true);
+  // "in_progress" | "ready_for_roll" | "season_complete" | null
+  const [rollState, setRollState] = useState(null);
   const [showNewSeason, setShowNewSeason] = useState(false);
   const navigate = useNavigate();
 
@@ -216,16 +275,7 @@ export default function Seasons() {
     ]).then(async ([s, m, active]) => {
       setSeasons(s);
       setMembers(m);
-
-      if (active?.rolls?.length) {
-          const lastRoll = active.rolls[active.rolls.length - 1];
-          const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`).then(r => r.json());
-          const allDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
-          setCurrentRollComplete(allDone);
-      } else {
-          setCurrentRollComplete(true);
-      }
-
+      setRollState(await getSeasonRollState(active));
       setLoading(false);
     });
   }
@@ -234,39 +284,79 @@ export default function Seasons() {
 
   const activeSeason = seasons.find(s => s.is_active);
 
+  // Roll progress label for the active season header, e.g. "Roll 2 / 4"
+  const rollProgressLabel = activeSeason && activeSeason.roll_count
+    ? `Roll ${activeSeason.rolls?.length ?? 0} / ${activeSeason.roll_count}`
+    : null;
+
   if (loading) return <div className="loading">Loading...</div>;
 
   return (
     <div>
       <div className="section-header mb-24">
         <h1>Seasons</h1>
-        <button className="btn btn-primary" onClick={() => setShowNewSeason(s => !s)}>
-          {showNewSeason ? "Cancel" : "+ New Season"}
-        </button>
+        {/* Only show manual New Season button when there's no active season */}
+        {!activeSeason && (
+          <button className="btn btn-primary" onClick={() => setShowNewSeason(s => !s)}>
+            {showNewSeason ? "Cancel" : "+ New Season"}
+          </button>
+        )}
       </div>
 
       {showNewSeason && (
         <NewSeasonForm onCreated={() => { setShowNewSeason(false); load(); }} />
       )}
 
-      {/* Active season roll generator */}
+      {/* Active season roll area */}
       {activeSeason && (
         <div className="mb-24">
-          <div className="text-muted mb-8" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
-            ACTIVE SEASON — {activeSeason.name}
+          <div className="flex gap-12 mb-8" style={{ alignItems: "center" }}>
+            <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
+              ACTIVE SEASON — {activeSeason.name}
+            </div>
+            {rollProgressLabel && (
+              <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
+                · {rollProgressLabel}
+              </div>
+            )}
           </div>
-          {currentRollComplete ? (
+
+          {rollState === "season_complete" && (
+            <SeasonCompleteBanner
+              onStartNewSeason={() => {
+                setShowNewSeason(true);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          )}
+
+          {rollState === "ready_for_roll" && (
             <NewRollPanel
               seasonId={activeSeason.id}
               members={members}
               onRollCreated={(rollId) => navigate(`/roll/${rollId}`)}
             />
-          ) : (
+          )}
+
+          {rollState === "in_progress" && (
             <div className="card" style={{ textAlign: "center", padding: 32 }}>
               <div className="text-muted">Current roll must be completed or dropped before generating a new one.</div>
             </div>
           )}
         </div>
+      )}
+
+      {/* No active season and form not shown */}
+      {!activeSeason && !showNewSeason && (
+        <div className="card mb-24" style={{ textAlign: "center", padding: 32 }}>
+          <div className="text-muted mb-16">No active season. Start one to begin rolling!</div>
+          <button className="btn btn-primary" onClick={() => setShowNewSeason(true)}>+ New Season</button>
+        </div>
+      )}
+
+      {/* New season form triggered from banner (active season present) */}
+      {activeSeason && showNewSeason && (
+        <NewSeasonForm onCreated={() => { setShowNewSeason(false); load(); }} />
       )}
 
       {/* All seasons */}
@@ -280,6 +370,7 @@ export default function Seasons() {
               <th>Season</th>
               <th>Started</th>
               <th>Ended</th>
+              <th>Rolls</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -294,6 +385,9 @@ export default function Seasons() {
                 </td>
                 <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{s.started_at}</td>
                 <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{s.ended_at || "—"}</td>
+                <td className="text-muted" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>
+                  {s.rolls?.length ?? 0}{s.roll_count ? ` / ${s.roll_count}` : ""}
+                </td>
                 <td>
                   {s.is_active
                     ? <span className="badge badge-watching">Active</span>
