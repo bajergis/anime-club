@@ -19,19 +19,23 @@ router.get('/active', (req, res) => {
 
 // POST /api/seasons
 router.post('/', (req, res) => {
-  const { name, started_at } = req.body;
+  const { name, started_at, roll_count } = req.body;
   // Deactivate existing active season
   db.prepare('UPDATE seasons SET is_active = 0').run();
   const result = db.prepare(
-    'INSERT INTO seasons (name, started_at, is_active) VALUES (?, ?, 1)'
-  ).run(name, started_at || new Date().toISOString().split('T')[0]);
+    'INSERT INTO seasons (name, started_at, roll_count, is_active) VALUES (?, ?, ?, 1)'
+  ).run(
+    name,
+    started_at || new Date().toISOString().split('T')[0],
+    roll_count ?? null,   // null means unlimited (old behaviour)
+  );
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 // GET /api/seasons/:id/rolls
 router.get('/:id/rolls', (req, res) => {
   const rolls = db.prepare(`
-    SELECT r.*, 
+    SELECT r.*,
       COUNT(a.id) AS assignment_count,
       AVG(a.rating) AS avg_rating
     FROM rolls r
@@ -43,15 +47,16 @@ router.get('/:id/rolls', (req, res) => {
   res.json(rolls);
 });
 
-// PATCH /api/seasons/:id — edit name, dates, active status
+// PATCH /api/seasons/:id — edit name, dates, active status, roll_count
 router.patch('/:id', (req, res) => {
-  const { name, started_at, ended_at, is_active } = req.body;
+  const { name, started_at, ended_at, is_active, roll_count } = req.body;
   const fields = [];
   const vals = [];
-  if (name !== undefined)       { fields.push('name = ?');       vals.push(name); }
-  if (started_at !== undefined) { fields.push('started_at = ?'); vals.push(started_at); }
-  if (ended_at !== undefined)   { fields.push('ended_at = ?');   vals.push(ended_at || null); }
-  if (is_active !== undefined)  { fields.push('is_active = ?');  vals.push(is_active ? 1 : 0); }
+  if (name !== undefined)       { fields.push('name = ?');        vals.push(name); }
+  if (started_at !== undefined) { fields.push('started_at = ?');  vals.push(started_at); }
+  if (ended_at !== undefined)   { fields.push('ended_at = ?');    vals.push(ended_at || null); }
+  if (is_active !== undefined)  { fields.push('is_active = ?');   vals.push(is_active ? 1 : 0); }
+  if (roll_count !== undefined) { fields.push('roll_count = ?');  vals.push(roll_count ?? null); }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
   vals.push(req.params.id);
   db.prepare(`UPDATE seasons SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
@@ -79,6 +84,13 @@ router.post('/:id/rolls', (req, res) => {
     'SELECT MAX(roll_number) AS max_roll FROM rolls WHERE season_id = ?'
   ).get(req.params.id);
   const roll_number = (lastRoll.max_roll || 0) + 1;
+
+  // Guard: reject if this roll would exceed the season's roll_count
+  if (season.roll_count != null && roll_number > season.roll_count) {
+    return res.status(409).json({
+      error: `Season "${season.name}" is complete — all ${season.roll_count} rolls have been used.`,
+    });
+  }
 
   const rollResult = db.prepare(
     'INSERT INTO rolls (season_id, roll_number, roll_date) VALUES (?, ?, ?)'
