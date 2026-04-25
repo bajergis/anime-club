@@ -25,6 +25,7 @@ function SeasonEditor({ season, members, onSaved }) {
         ended_at: form.ended_at || null,
         is_active: form.is_active,
       }),
+      credentials: "include",
     });
     setSaving(false);
     setMsg("Saved ✓");
@@ -98,6 +99,7 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roll_date: rollDate || undefined, skip_derangement: true }),
+      credentials: "include",
     }).then(r => r.json());
 
     const roll_id = rollRes.roll_id;
@@ -107,6 +109,7 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roll_id, ...row }),
+        credentials: "include",
       });
     }
 
@@ -211,7 +214,7 @@ function BulkRefresh({ seasons }) {
       ? `${API}/assignments/bulk-refresh-anilist`
       : `${API}/assignments/bulk-refresh-anilist?season_id=${seasonId}`;
 
-    const res = await fetch(url, { method: "POST" });
+    const res = await fetch(url, { method: "POST", credentials: "include", });
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
@@ -298,7 +301,7 @@ function EntryEditor({ members, seasons }) {
     const params = new URLSearchParams();
     if (filterMember) params.set("member_id", filterMember);
     if (filterSeason) params.set("season_id", filterSeason);
-    const data = await fetch(`${API}/assignments?${params}`).then(r => r.json());
+    const data = await fetch(`${API}/assignments?${params}`, { credentials: "include" }).then(r => r.json());
     const filtered = query.trim()
       ? data.filter(a => a.anime_title?.toLowerCase().includes(query.toLowerCase()))
       : data;
@@ -309,7 +312,7 @@ function EntryEditor({ members, seasons }) {
   async function searchAniList() {
     if (!aniQuery.trim()) return;
     setAniSearching(true);
-    const data = await fetch(`${API}/anime/search?q=${encodeURIComponent(aniQuery)}`).then(r => r.json());
+    const data = await fetch(`${API}/anime/search?q=${encodeURIComponent(aniQuery)}`, { credentials: "include" }).then(r => r.json());
     setAniResults(data);
     setAniSearching(false);
   }
@@ -319,8 +322,9 @@ function EntryEditor({ members, seasons }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ anilist_id: anilistId }),
+      credentials: "include",
     });
-    const fresh = await fetch(`${API}/assignments/${assignmentId}/refresh-anilist`, { method: "POST" }).then(r => r.json());
+    const fresh = await fetch(`${API}/assignments/${assignmentId}/refresh-anilist`, { method: "POST", credentials: "include" }).then(r => r.json());
     setAssignments(prev => prev.map(a => a.id === assignmentId
       ? { ...a, anime_title: fresh.title_english || fresh.title_romaji || a.anime_title, anilist_id: anilistId }
       : a
@@ -337,6 +341,7 @@ function EntryEditor({ members, seasons }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ anime_title: newTitle }),
+      credentials: "include",
     });
     setAssignments(prev => prev.map(a => a.id === assignmentId ? { ...a, anime_title: newTitle } : a));
     setMsg(m => ({ ...m, [assignmentId]: "Saved ✓" }));
@@ -517,8 +522,8 @@ export default function Admin() {
 
   function load() {
     Promise.all([
-      fetch(`${API}/seasons`).then(r => r.json()),
-      fetch(`${API}/members`).then(r => r.json()),
+      fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
     ]).then(([s, m]) => {
       setSeasons(s);
       setMembers(m);

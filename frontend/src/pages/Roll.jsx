@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useAuth } from "../AuthContext";
+import { useAuth } from "../lib/AuthContext";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -34,6 +34,7 @@ async function syncAniListProgress(assignments, members) {
             }`,
             variables: { username: member.anilist_username, mediaId: a.anilist_id },
           }),
+          credentials: "include",
         }).then(r => r.json()).catch(() => null);
 
         const entry = res?.data?.MediaList;
@@ -97,6 +98,7 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
         status: draft.status,
         notes: draft.notes || null,
       }),
+      credentials: "include",
     });
     const updated = {
       ...a,
@@ -261,8 +263,8 @@ export default function Roll() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/assignments?roll_id=${id}`).then(r => r.json()),
-      fetch(`${API}/members`).then(r => r.json()),
+      fetch(`${API}/assignments?roll_id=${id}`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
     ]).then(async ([data, members]) => {
       setAssignments(data);
       if (data.length) {
@@ -282,6 +284,7 @@ export default function Roll() {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ episodes_watched: u.episodes_watched, status: u.status }),
+            credentials: "include",
           })
         ));
         setAssignments(prev =>
@@ -298,7 +301,7 @@ export default function Roll() {
 
   async function manualSync() {
     setSyncing(true);
-    const members = await fetch(`${API}/members`).then(r => r.json());
+    const members = await fetch(`${API}/members`, { credentials: "include" }).then(r => r.json());
     const updates = await syncAniListProgress(assignments, members);
     if (updates.length) {
       await Promise.all(updates.map(u =>
@@ -306,6 +309,7 @@ export default function Roll() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ episodes_watched: u.episodes_watched, status: u.status }),
+          credentials: "include",
         })
       ));
       setAssignments(prev =>

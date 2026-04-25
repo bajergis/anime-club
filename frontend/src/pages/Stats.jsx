@@ -62,16 +62,42 @@ export default function Stats() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("members");
+  const [avatars, setAvatars] = useState({});
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/stats/members`).then(r => r.json()),
-      fetch(`${API}/stats/head-to-head`).then(r => r.json()),
-      fetch(`${API}/members`).then(r => r.json()),
-    ]).then(([ms, h, mems]) => {
+      fetch(`${API}/stats/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/stats/head-to-head`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+    ]).then(async ([ms, h, mems]) => {
       setMemberStats(ms);
       setH2h(h);
       setMembers(mems);
+
+      const avatarMap = {};
+
+      await Promise.all(
+        mems
+          .filter(m => m.anilist_username)
+          .map(m =>
+            fetch(`${API}/anime/anilist-proxy`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: `query($name: String) { User(name: $name) { avatar { large } } }`,
+                variables: { name: m.anilist_username },
+              }),
+              credentials: "include",
+            })
+              .then(r => r.json())
+              .then(d => {
+                avatarMap[m.id] = d.data?.User?.avatar?.large;
+              })
+              .catch(() => {})
+          )
+      );
+
+      setAvatars(avatarMap);
       setLoading(false);
     });
   }, []);
@@ -103,7 +129,20 @@ export default function Stats() {
             <div key={m.id} className="card">
               <div className="flex items-center justify-between mb-16">
                 <div className="flex items-center gap-8">
-                  <div className="avatar avatar-lg">{m.name?.charAt(0)}</div>
+                  {avatars[m.id] ? (
+                    <img
+                      src={avatars[m.id]}
+                      alt={m.name}
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: "50%",
+                        objectFit: "cover"
+                      }}
+                    />
+                  ) : (
+                    <div className="avatar avatar-lg">{m.name?.charAt(0)}</div>
+                  )}
                   <div>
                     <h2>{m.name}</h2>
                     {m.anilist_username && <div className="text-muted" style={{ fontSize: "0.75rem" }}>@{m.anilist_username}</div>}

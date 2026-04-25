@@ -13,10 +13,16 @@ router.get("/anilist", (req, res) => {
   res.redirect(url);
 });
 
+// Returns the current session's member + group info
 router.get("/me", (req, res) => {
   if (!req.session.memberId) return res.status(401).json({ error: "Not logged in" });
-  const member = db.prepare("SELECT id, name, anilist_username, avatar_url FROM members WHERE id = ?")
-    .get(req.session.memberId);
+  const member = db.prepare(`
+    SELECT m.id, m.name, m.anilist_username, m.avatar_url, m.group_id,
+           g.name AS group_name, g.owner_id
+    FROM members m
+    LEFT JOIN groups g ON g.id = m.group_id
+    WHERE m.id = ?
+  `).get(req.session.memberId);
   res.json(member);
 });
 
@@ -29,8 +35,12 @@ router.post("/logout", (req, res) => {
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).json({ error: "No code provided" });
-
-  // exchange code for token
+  console.log("Token exchange:", {
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET ? `${CLIENT_SECRET.slice(0, 4)}...` : "MISSING",
+    redirect_uri: REDIRECT_URI,
+  });
+  // Exchange code for token
   const tokenRes = await fetch("https://anilist.co/api/v2/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -48,7 +58,7 @@ router.get("/callback", async (req, res) => {
     return res.status(500).json({ error: "Token exchange failed" });
   }
 
-  // fetch their AniList profile to identify who this is
+  // Fetch their AniList profile
   const profileRes = await fetch("https://graphql.anilist.co", {
     method: "POST",
     headers: {
@@ -63,33 +73,43 @@ router.get("/callback", async (req, res) => {
   const viewer = profileRes.data?.Viewer;
   if (!viewer) return res.status(500).json({ error: "Could not fetch AniList profile" });
 
-  // upsert member row by anilist_username
-  const existing = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
+  // Look up existing member by anilist_username
+  const member = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
 
-  if (existing) {
-    db.prepare(`
-      UPDATE members SET anilist_token = ?, anilist_id = ?, avatar_url = ? WHERE id = ?
-    `).run(tokenRes.access_token, viewer.id, viewer.avatar?.large, existing.id);
-  } else {
-    // new member — create them
-    db.prepare(`
-      INSERT INTO members (id, name, anilist_username, anilist_token, anilist_id, avatar_url)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(viewer.name.toLowerCase(), viewer.name, viewer.name, tokenRes.access_token, viewer.id, viewer.avatar?.large);
+  // ── CLOSED REGISTRATION ──────────────────────────────────────────────────
+  // If this AniList user has no matching member row, they're not in any group.
+  // We don't auto-create accounts — redirect to a "not invited" page instead.
+  if (!member) {
+    console.log(`Login attempt by unknown AniList user: ${viewer.name} (${viewer.id})`);
+    return res.redirect(`${process.env.FRONTEND_URL}/not-invited`);
   }
 
-  // redirect to frontend with their member id so the app knows who logged in
-  const member = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
-  req.session.memberId = member.id;
+  // Update their token and avatar in case they've changed
+  db.prepare(`
+    UPDATE members SET anilist_token = ?, anilist_id = ?, avatar_url = ? WHERE id = ?
+  `).run(tokenRes.access_token, viewer.id, viewer.avatar?.large, member.id);
+
+  // Also upsert into users table (source of truth for auth)
+  db.prepare(`
+    INSERT INTO users (id, anilist_id, anilist_token, username, avatar_url)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      anilist_token = excluded.anilist_token,
+      avatar_url    = excluded.avatar_url
+  `).run(
+    `anilist:${viewer.id}`,
+    viewer.id,
+    tokenRes.access_token,
+    viewer.name,
+    viewer.avatar?.large,
+  );
+
+  // Set session — include groupId so middleware doesn't query it every request
+  req.session.memberId  = member.id;
   req.session.memberName = member.name;
-  console.log("Redirecting to:", process.env.FRONTEND_URL);
-  console.log("Token exchange payload:", {
-    grant_type: "authorization_code",
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET ? "set" : "missing",
-    redirect_uri: REDIRECT_URI,
-    code: code?.slice(0, 10) + "...",
-  });
+  req.session.groupId   = member.group_id;  // null if not in a group yet
+
+  console.log(`Login: ${viewer.name} → member ${member.id}, group ${member.group_id}`);
   res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
 });
 

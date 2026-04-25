@@ -16,6 +16,7 @@ function NewSeasonForm({ onCreated }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, started_at: date, roll_count: rollCount }),
+      credentials: "include",
     });
     setSaving(false);
     setName("");
@@ -116,6 +117,7 @@ function NewRollPanel({ seasonId, members, onRollCreated }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ member_ids: selectedMembers, roll_date: rollDate }),
+      credentials: "include",
     }).then(r => r.json());
     setResult(data);
     setAnimeTitles({});
@@ -134,6 +136,7 @@ function NewRollPanel({ seasonId, members, onRollCreated }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roll_id, assignee_id: assigneeId, assigner_id: assignerId, anime_title: title }),
+        credentials: "include",
       });
     }
     setSubmitting(false);
@@ -250,7 +253,7 @@ async function getSeasonRollState(active) {
   if (completedRolls.length === 0) return "ready_for_roll";
 
   const lastRoll = completedRolls[completedRolls.length - 1];
-  const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`).then(r => r.json());
+  const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`, { credentials: "include" }).then(r => r.json());
   const lastRollDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
 
   if (!lastRollDone) return "in_progress";
@@ -269,9 +272,9 @@ export default function Seasons() {
 
   function load() {
     Promise.all([
-      fetch(`${API}/seasons`).then(r => r.json()),
-      fetch(`${API}/members`).then(r => r.json()),
-      fetch(`${API}/seasons/active`).then(r => r.ok ? r.json() : null),
+      fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/seasons/active`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
     ]).then(async ([s, m, active]) => {
       setSeasons(s);
       setMembers(m);

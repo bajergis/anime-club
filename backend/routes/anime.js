@@ -1,7 +1,12 @@
+// anime.js
+
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
 import { searchAnime, formatAnimeData } from '../services/anilist.js';
 
 const router = Router();
+
+router.use(requireAuth);
 
 // GET /api/anime/search?q=title
 router.get('/search', async (req, res) => {
@@ -23,7 +28,6 @@ router.post("/anilist-proxy", async (req, res) => {
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
-    console.log("AniList proxy response:", JSON.stringify(data));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -6,18 +6,29 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 export default function Member() {
   const { id } = useParams();
   const [assignments, setAssignments] = useState([]);
+  const [assignedShows, setAssignedShows] = useState([]);
   const [member, setMember] = useState(null);
   const [anilistProfile, setAnilistProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: null, dir: 1 });
+
+  function toggleSort(key) {
+    setSortConfig(prev => ({
+      key,
+      dir: prev.key === key ? -prev.dir : 1,
+    }));
+  }
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/members`).then(r => r.json()),
-      fetch(`${API}/assignments?member_id=${id}`).then(r => r.json()),
-    ]).then(([members, assigns]) => {
-      const found = members.find(m => m.id === id);
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/assignments?member_id=${id}`, { credentials: "include" }).then(async r => r.json()),
+      fetch(`${API}/assignments?assigner_id=${id}`, { credentials: "include" }).then(r => r.json()),
+    ]).then(([members, assigns, assigned]) => {
+      const found = members.find(m => String(m.id) === String(id));
       setMember(found);
-      setAssignments(assigns);
+      setAssignments(Array.isArray(assigns) ? assigns : []);
+      setAssignedShows(Array.isArray(assigned) ? assigned : []);
       setLoading(false);
 
       if (found?.anilist_username) {
@@ -33,6 +44,7 @@ export default function Member() {
             }`,
             variables: { name: found.anilist_username },
           }),
+          credentials: "include",
         })
           .then(r => r.json())
           .then(d => setAnilistProfile(d.data?.User))
@@ -44,8 +56,26 @@ export default function Member() {
   if (loading) return <div className="loading">Loading...</div>;
   if (!member) return <div className="loading">Member not found.</div>;
 
-  const rated = assignments.filter(a => a.rating != null);
-  const avg = rated.length ? rated.reduce((s, a) => s + a.rating, 0) / rated.length : null;
+  const watchedByMember = assignments.filter(a => a.rating != null);
+
+  const avg = watchedByMember.length
+    ? watchedByMember.reduce((s, a) => s + Number(a.rating), 0) / watchedByMember.length
+    : null;
+
+  const ratedAssignedShows = assignedShows.filter(a => a.rating != null);
+
+  const assignedByAvg = ratedAssignedShows.length
+    ? ratedAssignedShows.reduce((s, a) => s + Number(a.rating), 0) / ratedAssignedShows.length
+    : null;
+
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+
+    const av = a[sortConfig.key] ?? -Infinity;
+    const bv = b[sortConfig.key] ?? -Infinity;
+
+    return av < bv ? -sortConfig.dir : av > bv ? sortConfig.dir : 0;
+  });
 
   return (
     <div>
@@ -72,27 +102,45 @@ export default function Member() {
             </a>
           )}
         </div>
-        <div style={{ marginLeft: "auto", textAlign: "right" }}>
-          <div className="stat-value">{avg ? avg.toFixed(2) : "—"}</div>
-          <div className="stat-label">Average Rating</div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 24, textAlign: "right" }}>
+          <div>
+            <div className="stat-value">{avg != null ? avg.toFixed(2) : "—"}</div>
+            <div className="stat-label">Avg Watched</div>
+          </div>
+
+          <div>
+            <div className="stat-value">{assignedByAvg != null ? assignedByAvg.toFixed(2) : "—"}</div>
+            <div className="stat-label">Avg Assigned</div>
+          </div>
         </div>
       </div>
 
       <h2 className="mb-16">Assignment History ({assignments.length})</h2>
-      <div className="card">
-        <table className="data-table">
+      <div className="card" style={{ overflowY: "auto", maxHeight: "600px" }}>
+        <table className="data-table assignments-sticky">
           <thead>
             <tr>
-              <th>Anime</th>
-              <th>Assigned by</th>
-              <th>Season / Roll</th>
-              <th>Rating</th>
-              <th>Episodes</th>
-              <th>Status</th>
+              {[
+                { label: "Anime", key: "anime_title" },
+                { label: "Assigned by", key: "assigner_name" },
+                { label: "Season / Roll", key: "roll_number" },
+                { label: "Rating", key: "rating" },
+                { label: "Episodes", key: "episodes_watched" },
+                { label: "Status", key: "status" },
+              ].map(({ label, key }) => (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(key)}
+                  style={{ cursor: "pointer", userSelect: "none" }}
+                >
+                  {label}
+                  {sortConfig.key === key ? (sortConfig.dir === 1 ? " ▲" : " ▼") : " ↕"}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {assignments.map(a => {
+            {sortedAssignments.map(a => {
               const aniData = a.anilist_data
                 ? (() => { try { return JSON.parse(a.anilist_data); } catch { return null; } })()
                 : null;
@@ -108,7 +156,25 @@ export default function Member() {
                         />
                       )}
                       <div>
-                        <div style={{ fontWeight: 500, fontSize: "0.875rem" }}>{a.anime_title}</div>
+                        {aniData?.siteUrl ? (
+                          <a
+                            href={aniData.siteUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              fontWeight: 500,
+                              fontSize: "0.875rem",
+                              color: "var(--accent)",
+                              textDecoration: "none"
+                            }}
+                          >
+                            {a.anime_title}
+                          </a>
+                        ) : (
+                          <div style={{ fontWeight: 500, fontSize: "0.875rem" }}>
+                            {a.anime_title}
+                          </div>
+                        )}
                         {aniData?.genres?.slice(0, 2).map(g => (
                           <span key={g} className="genre-chip" style={{ marginRight: 3 }}>{g}</span>
                         ))}

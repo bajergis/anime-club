@@ -1,27 +1,26 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-const BASE = API.replace(/\/api$/, "");
-
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [member, setMember] = useState(undefined);
 
+  const authBase = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:3001";
+
   useEffect(() => {
-    fetch(`${BASE}/auth/me`, { credentials: "include" })
+    fetch(`${authBase}/auth/me`, { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(setMember)
       .catch(() => setMember(null));
   }, []);
 
-  function logout() {
-    fetch(`${BASE}/auth/logout`, { method: "POST", credentials: "include" })
-      .then(() => setMember(null));
+  async function logout() {
+    await fetch(`${authBase}/auth/logout`, { method: "POST", credentials: "include" });
+    setMember(null);
   }
 
   return (
-    <AuthContext.Provider value={{ member, setMember, logout, authBase: BASE }}>
+    <AuthContext.Provider value={{ member, setMember, logout, authBase }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,74 +1,120 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { requireAuth, requireGroupMember } from '../middleware/auth.js';
 
 const router = Router();
 
-// GET /api/stats/overview — global stats
+// All stats routes require auth + group membership
+router.use(requireAuth, requireGroupMember);
+
+// GET /api/stats/overview
 router.get('/overview', (req, res) => {
-  const totalAnime = db.prepare('SELECT COUNT(*) AS c FROM assignments').get().c;
-  const rated = db.prepare('SELECT COUNT(*) AS c FROM assignments WHERE rating IS NOT NULL').get().c;
-  const avgRating = db.prepare('SELECT AVG(rating) AS avg FROM assignments WHERE rating IS NOT NULL').get().avg;
-  const seasons = db.prepare('SELECT COUNT(*) AS c FROM seasons').get().c;
-  const members = db.prepare('SELECT COUNT(*) AS c FROM members').get().c;
-  const dropped = db.prepare("SELECT COUNT(*) AS c FROM assignments WHERE status = 'dropped'").get().c;
+  const totalAnime = db.prepare(`
+    SELECT COUNT(*) AS c FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ?
+  `).get(req.groupId).c;
+
+  const avgRating = db.prepare(`
+    SELECT AVG(a.rating) AS avg FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+  `).get(req.groupId).avg;
+
+  const seasons = db.prepare(
+    'SELECT COUNT(*) AS c FROM seasons WHERE group_id = ?'
+  ).get(req.groupId).c;
+
+  const members = db.prepare(
+    'SELECT COUNT(*) AS c FROM members WHERE group_id = ?'
+  ).get(req.groupId).c;
+
+  const dropped = db.prepare(`
+    SELECT COUNT(*) AS c FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ? AND a.status = 'dropped'
+  `).get(req.groupId).c;
+
+  const rated = db.prepare(`
+    SELECT COUNT(*) AS c FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+  `).get(req.groupId).c;
+
   res.json({ totalAnime, rated, avgRating, seasons, members, dropped });
 });
 
-// GET /api/stats/members — per-member stats
+// GET /api/stats/members
 router.get('/members', (req, res) => {
-  const members = db.prepare('SELECT * FROM members').all();
+  const members = db.prepare(
+    'SELECT * FROM members WHERE group_id = ?'
+  ).all(req.groupId);
+
   const stats = members.map(m => {
     const received = db.prepare(`
-      SELECT COUNT(*) AS total, AVG(rating) AS avg_rating,
-        AVG(CASE WHEN status = 'completed' THEN 1.0 ELSE 0 END) AS completion_rate,
-        MIN(rating) AS min_rating, MAX(rating) AS max_rating
-      FROM assignments WHERE assignee_id = ? AND rating IS NOT NULL
-    `).get(m.id);
+      SELECT COUNT(*) AS total, AVG(a.rating) AS avg_rating,
+        AVG(CASE WHEN a.status = 'completed' THEN 1.0 ELSE 0 END) AS completion_rate,
+        MIN(a.rating) AS min_rating, MAX(a.rating) AS max_rating
+      FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
+    `).get(m.id, req.groupId);
 
     const given = db.prepare(`
-      SELECT COUNT(*) AS total, AVG(rating) AS avg_rating_received,
-        MIN(rating) AS min_given, MAX(rating) AS max_given
-      FROM assignments WHERE assigner_id = ? AND rating IS NOT NULL
-    `).get(m.id);
+      SELECT COUNT(*) AS total, AVG(a.rating) AS avg_rating_received,
+        MIN(a.rating) AS min_given, MAX(a.rating) AS max_given
+      FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assigner_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
+    `).get(m.id, req.groupId);
 
-    // Genres they've watched most
-    const allData = db.prepare(
-      'SELECT anilist_data FROM assignments WHERE assignee_id = ? AND anilist_data IS NOT NULL'
-    ).all(m.id);
+    const allData = db.prepare(`
+      SELECT a.anilist_data FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assignee_id = ? AND a.anilist_data IS NOT NULL AND s.group_id = ?
+    `).all(m.id, req.groupId);
+
     const genreCounts = {};
     for (const row of allData) {
       try {
         const d = JSON.parse(row.anilist_data);
-        for (const g of (d.genres || [])) {
-          genreCounts[g] = (genreCounts[g] || 0) + 1;
-        }
+        for (const g of (d.genres || [])) genreCounts[g] = (genreCounts[g] || 0) + 1;
       } catch {}
     }
     const top_genres = Object.entries(genreCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
+      .sort((a, b) => b[1] - a[1]).slice(0, 5)
       .map(([genre, count]) => ({ genre, count }));
 
-    // Highest rated show they received
     const best = db.prepare(`
-      SELECT anime_title, rating FROM assignments
-      WHERE assignee_id = ? AND rating IS NOT NULL
-      ORDER BY rating DESC LIMIT 1
-    `).get(m.id);
+      SELECT a.anime_title, a.rating FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
+      ORDER BY a.rating DESC LIMIT 1
+    `).get(m.id, req.groupId);
 
-    // Lowest rated
     const worst = db.prepare(`
-      SELECT anime_title, rating FROM assignments
-      WHERE assignee_id = ? AND rating IS NOT NULL
-      ORDER BY rating ASC LIMIT 1
-    `).get(m.id);
+      SELECT a.anime_title, a.rating FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
+      ORDER BY a.rating ASC LIMIT 1
+    `).get(m.id, req.groupId);
 
-    // Rating they give vs AniList average (taste profile)
     const tasteRows = db.prepare(`
       SELECT a.rating, a.anilist_data FROM assignments a
-      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND a.anilist_data IS NOT NULL
-    `).all(m.id);
-    let tasteOffset = null;
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND a.anilist_data IS NOT NULL AND s.group_id = ?
+    `).all(m.id, req.groupId);
+
     const offsets = tasteRows.map(r => {
       try {
         const d = JSON.parse(r.anilist_data);
@@ -76,9 +122,9 @@ router.get('/members', (req, res) => {
       } catch {}
       return null;
     }).filter(v => v !== null);
-    if (offsets.length > 0) {
-      tasteOffset = offsets.reduce((a, b) => a + b, 0) / offsets.length;
-    }
+    const tasteOffset = offsets.length
+      ? offsets.reduce((a, b) => a + b, 0) / offsets.length
+      : null;
 
     return {
       ...m,
@@ -98,9 +144,11 @@ router.get('/members', (req, res) => {
   res.json(stats);
 });
 
-// GET /api/stats/season/:id — season-level breakdown
+// GET /api/stats/season/:id
 router.get('/season/:id', (req, res) => {
-  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
+  const season = db.prepare(
+    'SELECT * FROM seasons WHERE id = ? AND group_id = ?'
+  ).get(req.params.id, req.groupId);
   if (!season) return res.status(404).json({ error: 'Not found' });
 
   const rollStats = db.prepare(`
@@ -124,38 +172,42 @@ router.get('/season/:id', (req, res) => {
     FROM members m
     LEFT JOIN assignments a ON a.assignee_id = m.id
     LEFT JOIN rolls r ON a.roll_id = r.id
-    WHERE r.season_id = ?
+    WHERE r.season_id = ? AND m.group_id = ?
     GROUP BY m.id
-  `).all(req.params.id);
+  `).all(req.params.id, req.groupId);
 
-  const genreFreq = {};
   const allData = db.prepare(`
     SELECT a.anilist_data FROM assignments a
     JOIN rolls r ON a.roll_id = r.id
     WHERE r.season_id = ? AND a.anilist_data IS NOT NULL
   `).all(req.params.id);
+
+  const genreFreq = {};
   for (const row of allData) {
     try {
       const d = JSON.parse(row.anilist_data);
       for (const g of (d.genres || [])) genreFreq[g] = (genreFreq[g] || 0) + 1;
     } catch {}
   }
-  const top_genres = Object.entries(genreFreq).sort((a,b)=>b[1]-a[1]).slice(0,8)
+  const top_genres = Object.entries(genreFreq)
+    .sort((a, b) => b[1] - a[1]).slice(0, 8)
     .map(([genre, count]) => ({ genre, count }));
 
   res.json({ season, rollStats, memberBreakdown, top_genres });
 });
 
-// GET /api/stats/head-to-head — assigner → assignee rating analysis
+// GET /api/stats/head-to-head
 router.get('/head-to-head', (req, res) => {
   const rows = db.prepare(`
-    SELECT assigner_id, assignee_id,
-      AVG(rating) AS avg_rating,
+    SELECT a.assigner_id, a.assignee_id,
+      AVG(a.rating) AS avg_rating,
       COUNT(*) AS count
-    FROM assignments
-    WHERE rating IS NOT NULL
-    GROUP BY assigner_id, assignee_id
-  `).all();
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+    GROUP BY a.assigner_id, a.assignee_id
+  `).all(req.groupId);
   res.json(rows);
 });
 

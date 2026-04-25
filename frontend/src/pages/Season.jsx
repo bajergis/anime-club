@@ -33,8 +33,8 @@ const sortedAssignments = [...assignments].sort((a, b) => {
 
 useEffect(() => {
   Promise.all([
-    fetch(`${API}/stats/season/${id}`).then(r => r.json()),
-    fetch(`${API}/assignments?season_id=${id}`).then(r => r.json()),
+    fetch(`${API}/stats/season/${id}`, { credentials: "include" }).then(r => r.json()),
+    fetch(`${API}/assignments?season_id=${id}`, { credentials: "include" }).then(r => r.json()),
   ]).then(([s, a]) => {
     setStats(s);
     setAssignments(a);
@@ -49,6 +49,7 @@ useEffect(() => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ended_at: endedAt || null }),
+      credentials: "include",
     });
     setSavingDate(false);
     setEditingDates(false);
@@ -73,13 +74,6 @@ useEffect(() => {
                 <span style={{ color: "var(--green)" }}>ongoing</span>
               )}
             </div>
-          </div>
-          <div className="flex gap-8">
-            {!editingDates && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setEditingDates(true)}>
-                ✎ Edit Dates
-              </button>
-            )}
           </div>
         </div>
 

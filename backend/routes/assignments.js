@@ -6,7 +6,7 @@ const router = Router();
 
 // GET /api/assignments?season_id=&roll_id=&member_id=
 router.get('/', (req, res) => {
-  const { season_id, roll_id, member_id } = req.query;
+  const { season_id, roll_id, member_id, assigner_id } = req.query;
   let sql = `
     SELECT a.*, 
       m1.name AS assignee_name, m2.name AS assigner_name,
@@ -21,7 +21,14 @@ router.get('/', (req, res) => {
   const params = [];
   if (season_id)  { sql += ' AND r.season_id = ?';     params.push(season_id); }
   if (roll_id)    { sql += ' AND a.roll_id = ?';        params.push(roll_id); }
-  if (member_id)  { sql += ' AND a.assignee_id = ?';    params.push(member_id); }
+  if (member_id)  {
+    sql += ' AND a.assignee_id = ?';
+    params.push(member_id);
+  }
+  if (assigner_id) {
+    sql += ' AND a.assigner_id = ?';
+    params.push(assigner_id);
+  }
   sql += ' ORDER BY s.id DESC, r.roll_number DESC, a.id ASC';
   res.json(db.prepare(sql).all(...params));
 });

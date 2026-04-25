@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../lib/AuthContext";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const AUTH = API.replace("/api", "");
 
 function RatingBar({ value, max = 10 }) {
   if (value == null) return <span className="text-muted" style={{ fontSize: "0.75rem" }}>—</span>;
@@ -19,15 +21,26 @@ function StatusBadge({ status }) {
   return <span className={`badge badge-${status || "pending"}`}>{status || "pending"}</span>;
 }
 
-function MemberInitial({ name }) {
+function MemberAvatar({ member }) {
+  if (member.avatar_url) {
+    return (
+      <img
+        src={member.avatar_url}
+        alt={member.name}
+        style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+      />
+    );
+  }
   return (
     <div className="avatar">
-      {name?.charAt(0).toUpperCase()}
+      {member.name?.charAt(0).toUpperCase()}
     </div>
   );
 }
 
 export default function Dashboard() {
+  const { member } = useAuth();
+  const [user, setUser] = useState(null);
   const [overview, setOverview] = useState(null);
   const [activeSeason, setActiveSeason] = useState(null);
   const [allSeasons, setAllSeasons] = useState([]);
@@ -35,39 +48,19 @@ export default function Dashboard() {
   const [currentRollId, setCurrentRollId] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [avatars, setAvatars] = useState({});
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/stats/overview`).then(r => r.json()),
-      fetch(`${API}/seasons/active`).then(r => r.ok ? r.json() : null),
-      fetch(`${API}/members`).then(r => r.json()),
-      fetch(`${API}/seasons`).then(r => r.json()),
-    ]).then(async ([ov, season, mems, seasons]) => {
+      fetch(`${API}/stats/overview`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/seasons/active`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
+    ]).then(async ([ov, season, mems, seasons, me]) => {
       setOverview(ov);
       setActiveSeason(season);
       setMembers(mems);
-
-      const avatarMap = {};
-      await Promise.all(
-        mems
-          .filter(m => m.anilist_username)
-          .map(m =>
-            fetch(`${API}/anime/anilist-proxy`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                query: `query($name: String) { User(name: $name) { avatar { large } } }`,
-                variables: { name: m.anilist_username },
-              }),
-            })
-              .then(r => r.json())
-              .then(d => { avatarMap[m.id] = d.data?.User?.avatar?.large; })
-              .catch(() => {})
-          )
-      );
-      setAvatars(avatarMap);
       setAllSeasons(seasons);
+      setUser(me);
       setLoading(false);
 
       if (season?.rolls?.length) {
@@ -124,8 +117,19 @@ export default function Dashboard() {
               <div className="stat-label">Seasons</div>
             </div>
             <div className="stat">
-              <div className="stat-value" style={{ color: "var(--red)" }}>{overview.dropped}</div>
-              <div className="stat-label">Dropped</div>
+              <div className="stat-value">
+                {allSeasons.length
+                  ? new Date(
+                      [...allSeasons]
+                        .sort((a, b) => new Date(a.started_at) - new Date(b.started_at))[0]
+                        .started_at
+                    ).toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric"
+                    })
+                  : "—"}
+              </div>
+              <div className="stat-label">Group Debut</div>
             </div>
           </div>
         </div>
@@ -148,7 +152,6 @@ export default function Dashboard() {
           <div className="flex flex-col gap-8">
             {currentRoll?.length ? currentRoll.map(a => {
               const ani = a.anilist_data ? JSON.parse(a.anilist_data) : null;
-
               return (
                 <div key={a.id} className="anime-card">
                   {ani?.cover_image_medium ? (
@@ -208,17 +211,19 @@ export default function Dashboard() {
         {/* Members */}
         <div>
           <div className="section-header">
-            <h2>Members</h2>
+            <h2>{user?.group_name ?? 'Members'}</h2>
+            {user && (
+              <div className="flex items-center gap-8">
+                <MemberAvatar member={user} />
+                <span className="text-muted" style={{ fontSize: "0.8rem" }}>{user.name}</span>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-8">
             {members.map(m => (
               <Link key={m.id} to={`/member/${m.id}`} style={{ textDecoration: "none" }}>
                 <div className="anime-card" style={{ alignItems: "center" }}>
-                  {avatars[m.id]
-                    ? <img src={avatars[m.id]} alt={m.name}
-                        style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
-                    : <MemberInitial name={m.name} />
-                  }
+                  <MemberAvatar member={m} />
                   <div className="anime-info">
                     <div className="anime-title">{m.name}</div>
                     {m.anilist_username && (

@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { requireAuth, requireGroupMember } from '../middleware/auth.js';
 import { generateDerangement } from '../services/derangement.js';
 
 const router = Router();
+
+// All seasons routes require auth + group membership
+router.use(requireAuth, requireGroupMember);
 
 // GET /api/seasons
 router.get('/', (req, res) => {
@@ -10,14 +14,15 @@ router.get('/', (req, res) => {
     SELECT s.*, COUNT(r.id) AS rolls_completed
     FROM seasons s
     LEFT JOIN rolls r ON r.season_id = s.id
+    WHERE s.group_id = ?
     GROUP BY s.id
     ORDER BY s.id DESC
-  `).all());
+  `).all(req.groupId));
 });
 
 // GET /api/seasons/active
 router.get('/active', (req, res) => {
-  const season = db.prepare('SELECT * FROM seasons WHERE is_active = 1 LIMIT 1').get();
+  const season = db.prepare('SELECT * FROM seasons WHERE is_active = 1 AND group_id = ? LIMIT 1').get(req.groupId);
   if (!season) return res.status(404).json({ error: 'No active season' });
   const rolls = db.prepare('SELECT * FROM rolls WHERE season_id = ? ORDER BY roll_number').all(season.id);
   res.json({ ...season, rolls });
@@ -27,19 +32,26 @@ router.get('/active', (req, res) => {
 router.post('/', (req, res) => {
   const { name, started_at, roll_count } = req.body;
   // Deactivate existing active season
-  db.prepare('UPDATE seasons SET is_active = 0').run();
+  db.prepare('UPDATE seasons SET is_active = 0 WHERE group_id = ?').run(req.groupId);
   const result = db.prepare(
-    'INSERT INTO seasons (name, started_at, roll_count, is_active) VALUES (?, ?, ?, 1)'
+    'INSERT INTO seasons (name, started_at, roll_count, is_active, group_id) VALUES (?, ?, ?, 1, ?)'
   ).run(
     name,
     started_at || new Date().toISOString().split('T')[0],
-    roll_count ?? null,   // null means unlimited (old behaviour)
+    roll_count ?? null,
+    req.groupId,
   );
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 // GET /api/seasons/:id/rolls
 router.get('/:id/rolls', (req, res) => {
+  // Verify season belongs to this group
+  const season = db.prepare(
+    'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
+  ).get(req.params.id, req.groupId);
+  if (!season) return res.status(404).json({ error: 'Season not found' });
+
   const rolls = db.prepare(`
     SELECT r.*,
       COUNT(a.id) AS assignment_count,
@@ -53,8 +65,13 @@ router.get('/:id/rolls', (req, res) => {
   res.json(rolls);
 });
 
-// PATCH /api/seasons/:id — edit name, dates, active status, roll_count
+// PATCH /api/seasons/:id
 router.patch('/:id', (req, res) => {
+  const season = db.prepare(
+    'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
+  ).get(req.params.id, req.groupId);
+  if (!season) return res.status(404).json({ error: 'Season not found' });
+
   const { name, started_at, ended_at, is_active, roll_count } = req.body;
   const fields = [];
   const vals = [];
@@ -69,21 +86,25 @@ router.patch('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/seasons/:id/rolls/:rollId — remove a roll and all its assignments
+// DELETE /api/seasons/:id/rolls/:rollId
 router.delete('/:id/rolls/:rollId', (req, res) => {
+  const season = db.prepare(
+    'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
+  ).get(req.params.id, req.groupId);
+  if (!season) return res.status(404).json({ error: 'Season not found' });
   db.prepare('DELETE FROM assignments WHERE roll_id = ?').run(req.params.rollId);
   db.prepare('DELETE FROM derangement_history WHERE roll_id = ?').run(req.params.rollId);
   db.prepare('DELETE FROM rolls WHERE id = ? AND season_id = ?').run(req.params.rollId, req.params.id);
   res.json({ ok: true });
 });
 
-// POST /api/seasons/:id/rolls — create a new roll.
-// If skip_derangement=true, just creates the roll and returns the roll_id with an empty derangement.
-// The frontend (admin page) can then POST assignments manually.
+// POST /api/seasons/:id/rolls
 router.post('/:id/rolls', (req, res) => {
   const { roll_date, member_ids, skip_derangement } = req.body;
 
-  const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
+  const season = db.prepare(
+    'SELECT * FROM seasons WHERE id = ? AND group_id = ?'
+  ).get(req.params.id, req.groupId);
   if (!season) return res.status(404).json({ error: 'Season not found' });
 
   const lastRoll = db.prepare(
@@ -91,7 +112,6 @@ router.post('/:id/rolls', (req, res) => {
   ).get(req.params.id);
   const roll_number = (lastRoll.max_roll || 0) + 1;
 
-  // Guard: reject if this roll would exceed the season's roll_count
   if (season.roll_count != null && roll_number > season.roll_count) {
     return res.status(409).json({
       error: `Season "${season.name}" is complete — all ${season.roll_count} rolls have been used.`,
