@@ -66,7 +66,7 @@ export default function Dashboard() {
       if (season?.rolls?.length) {
         const lastRoll = season.rolls[season.rolls.length - 1];
         setCurrentRollId(lastRoll.id);
-        fetch(`${API}/assignments?roll_id=${lastRoll.id}`)
+        fetch(`${API}/assignments?roll_id=${lastRoll.id}`, { credentials: "include"})
           .then(r => r.json())
           .then(setCurrentRoll);
       }

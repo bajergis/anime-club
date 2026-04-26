@@ -75,13 +75,28 @@ function SeasonEditor({ season, members, onSaved }) {
 
 // ── Manual Roll Builder ───────────────────────────────────────
 function ManualRollBuilder({ season, members, onRollAdded }) {
+  const [mode, setMode] = useState("new"); // "new" | "existing"
+  const [existingRolls, setExistingRolls] = useState([]);
+  const [selectedRollId, setSelectedRollId] = useState("");
   const [rollDate, setRollDate] = useState("");
-  const [rows, setRows] = useState([{ assignee_id: "", assigner_id: "", anime_title: "" }]);
+  const [rows, setRows] = useState([{ assignee_id: "", assigner_id: "", anime_title: "", rating: "" }]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // Load existing rolls when switching to "existing" mode
+  useEffect(() => {
+    if (mode === "existing") {
+      fetch(`${API}/seasons/${season.id}/rolls`, { credentials: "include" })
+        .then(r => r.json())
+        .then(rolls => {
+          setExistingRolls(rolls);
+          if (rolls.length) setSelectedRollId(String(rolls[0].id));
+        });
+    }
+  }, [mode, season.id]);
+
   function addRow() {
-    setRows(r => [...r, { assignee_id: "", assigner_id: "", anime_title: "" }]);
+    setRows(r => [...r, { assignee_id: "", assigner_id: "", anime_title: "", rating: "" }]);
   }
   function removeRow(i) {
     setRows(r => r.filter((_, idx) => idx !== i));
@@ -95,14 +110,24 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
     if (!valid.length) return;
     setSaving(true);
 
-    const rollRes = await fetch(`${API}/seasons/${season.id}/rolls`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roll_date: rollDate || undefined, skip_derangement: true }),
-      credentials: "include",
-    }).then(r => r.json());
+    let roll_id;
+    let roll_number;
 
-    const roll_id = rollRes.roll_id;
+    if (mode === "existing") {
+      // Use the selected existing roll
+      roll_id = selectedRollId;
+      roll_number = existingRolls.find(r => String(r.id) === selectedRollId)?.roll_number;
+    } else {
+      // Create a new roll
+      const rollRes = await fetch(`${API}/seasons/${season.id}/rolls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roll_date: rollDate || undefined, skip_derangement: true }),
+        credentials: "include",
+      }).then(r => r.json());
+      roll_id = rollRes.roll_id;
+      roll_number = rollRes.roll_number;
+    }
 
     for (const row of valid) {
       await fetch(`${API}/assignments`, {
@@ -114,8 +139,8 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
     }
 
     setSaving(false);
-    setMsg(`Roll #${rollRes.roll_number} created with ${valid.length} assignments ✓`);
-    setRows([{ assignee_id: "", assigner_id: "", anime_title: "" }]);
+    setMsg(`Added ${valid.length} assignment${valid.length > 1 ? "s" : ""} to Roll #${roll_number} ✓`);
+    setRows([{ assignee_id: "", assigner_id: "", anime_title: "", rating: "" }]);
     setRollDate("");
     setTimeout(() => setMsg(""), 4000);
     onRollAdded();
@@ -124,15 +149,63 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
   return (
     <div className="card mt-16">
       <div className="flex items-center justify-between mb-16">
-        <h2>Add Historical Roll — {season.name}</h2>
+        <h2>Manual Editor — {season.name}</h2>
         {msg && <span style={{ fontSize: "0.75rem", color: "var(--green)" }}>{msg}</span>}
       </div>
 
-      <div className="flex gap-8 mb-16" style={{ alignItems: "flex-end" }}>
-        <div>
-          <label style={{ fontSize: "0.7rem", color: "var(--text2)", display: "block", marginBottom: 3 }}>Roll Date (optional)</label>
-          <input type="date" value={rollDate} onChange={e => setRollDate(e.target.value)} style={{ width: 180 }} />
+      {/* Mode toggle */}
+      <div className="flex gap-8 mb-16">
+        <button
+          className={`btn btn-sm ${mode === "new" ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setMode("new")}
+        >
+          + New Roll
+        </button>
+        <button
+          className={`btn btn-sm ${mode === "existing" ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setMode("existing")}
+        >
+          Add to Existing Roll
+        </button>
+      </div>
+
+      {/* Mode-specific controls */}
+      {mode === "new" ? (
+        <div className="flex gap-8 mb-16" style={{ alignItems: "flex-end" }}>
+          <div>
+            <label style={{ fontSize: "0.7rem", color: "var(--text2)", display: "block", marginBottom: 3 }}>
+              Roll Date (optional)
+            </label>
+            <input
+              type="date"
+              value={rollDate}
+              onChange={e => setRollDate(e.target.value)}
+              style={{ width: 180 }}
+            />
+          </div>
         </div>
+      ) : (
+        <div className="flex gap-8 mb-16" style={{ alignItems: "flex-end" }}>
+          <div>
+            <label style={{ fontSize: "0.7rem", color: "var(--text2)", display: "block", marginBottom: 3 }}>
+              Select Roll
+            </label>
+            <select
+              value={selectedRollId}
+              onChange={e => setSelectedRollId(e.target.value)}
+              style={{ width: 220 }}
+            >
+              {existingRolls.map(r => (
+                <option key={r.id} value={r.id}>
+                  Roll #{r.roll_number} — {r.roll_date || "no date"} ({r.assignment_count ?? 0} assignments)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-8 mb-12" style={{ justifyContent: "flex-end" }}>
         <button className="btn btn-ghost btn-sm" onClick={addRow}>+ Add Row</button>
       </div>
 
@@ -177,7 +250,11 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
                 />
               </td>
               <td>
-                <button className="btn btn-ghost btn-sm" onClick={() => removeRow(i)} style={{ color: "var(--red)" }}>✕</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => removeRow(i)}
+                  style={{ color: "var(--red)" }}
+                >✕</button>
               </td>
             </tr>
           ))}
@@ -185,8 +262,12 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
       </table>
 
       <div className="flex" style={{ justifyContent: "flex-end" }}>
-        <button className="btn btn-primary" onClick={submit} disabled={saving || !rows.some(r => r.assignee_id && r.assigner_id && r.anime_title)}>
-          {saving ? "Saving..." : "Save Roll"}
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={saving || !rows.some(r => r.assignee_id && r.assigner_id && r.anime_title) || (mode === "existing" && !selectedRollId)}
+        >
+          {saving ? "Saving..." : mode === "existing" ? "Add to Roll" : "Save Roll"}
         </button>
       </div>
     </div>
@@ -309,6 +390,15 @@ function EntryEditor({ members, seasons }) {
     setSearching(false);
   }
 
+  async function deleteAssignment(id) {
+    if (!confirm("Delete this assignment?")) return;
+    await fetch(`${API}/assignments/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    setAssignments(prev => prev.filter(a => a.id !== id));
+  }
+
   async function searchAniList() {
     if (!aniQuery.trim()) return;
     setAniSearching(true);
@@ -427,6 +517,13 @@ function EntryEditor({ members, seasons }) {
                         >
                           {editingId === a.id ? "Cancel" : "Fix"}
                         </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => deleteAssignment(a.id)}
+                          style={{ color: "var(--red)"}}
+                        >
+                          ✕
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -539,7 +636,7 @@ export default function Admin() {
   const tabs = [
     { id: "seasons", label: "Edit Seasons" },
     { id: "entries", label: "Edit Entries" },
-    { id: "rolls", label: "Add Historical Rolls" },
+    { id: "rolls", label: "Roll Editor" },
     { id: "anilist", label: "AniList Refresh" },
   ];
 
@@ -577,7 +674,7 @@ export default function Admin() {
       {tab === "rolls" && (
         <div>
           <div className="card">
-            <h2 className="mb-8">Add Historical Rolls</h2>
+            <h2 className="mb-8">Season Selection</h2>
             <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
               Manually enter rolls from older seasons. Rolls are created without a derangement.
             </div>

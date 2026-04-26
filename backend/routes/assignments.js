@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { requireAuth, requireGroupMember } from '../middleware/auth.js';
 import { searchAnime, getAnimeById, formatAnimeData } from '../services/anilist.js';
 
 const router = Router();
 
-// GET /api/assignments?season_id=&roll_id=&member_id=
+router.use(requireAuth, requireGroupMember);
+
 router.get('/', (req, res) => {
   const { season_id, roll_id, member_id, assigner_id } = req.query;
   let sql = `
-    SELECT a.*, 
+    SELECT a.*,
       m1.name AS assignee_name, m2.name AS assigner_name,
       r.roll_number, r.roll_date, s.name AS season_name
     FROM assignments a
@@ -16,19 +18,13 @@ router.get('/', (req, res) => {
     JOIN members m2 ON a.assigner_id = m2.id
     JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
-    WHERE 1=1
+    WHERE s.group_id = ?
   `;
-  const params = [];
-  if (season_id)  { sql += ' AND r.season_id = ?';     params.push(season_id); }
-  if (roll_id)    { sql += ' AND a.roll_id = ?';        params.push(roll_id); }
-  if (member_id)  {
-    sql += ' AND a.assignee_id = ?';
-    params.push(member_id);
-  }
-  if (assigner_id) {
-    sql += ' AND a.assigner_id = ?';
-    params.push(assigner_id);
-  }
+  const params = [req.groupId];
+  if (season_id)   { sql += ' AND r.season_id = ?';  params.push(season_id); }
+  if (roll_id)     { sql += ' AND a.roll_id = ?';     params.push(roll_id); }
+  if (member_id)   { sql += ' AND a.assignee_id = ?'; params.push(member_id); }
+  if (assigner_id) { sql += ' AND a.assigner_id = ?'; params.push(assigner_id); }
   sql += ' ORDER BY s.id DESC, r.roll_number DESC, a.id ASC';
   res.json(db.prepare(sql).all(...params));
 });
@@ -43,8 +39,8 @@ router.get('/:id', (req, res) => {
     JOIN members m2 ON a.assigner_id = m2.id
     JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
-    WHERE a.id = ?
-  `).get(req.params.id);
+    WHERE a.id = ? AND s.group_id = ?
+  `).get(req.params.id, req.groupId);
   if (!row) return res.status(404).json({ error: 'Not found' });
   if (row.anilist_data) row.anilist_data = JSON.parse(row.anilist_data);
   res.json(row);
@@ -56,52 +52,68 @@ router.post('/', async (req, res) => {
   if (!roll_id || !assignee_id || !assigner_id || !anime_title)
     return res.status(400).json({ error: 'Missing required fields' });
 
-  // Auto-search AniList for metadata
+  // Verify the roll belongs to this group
+  const roll = db.prepare(`
+    SELECT r.id FROM rolls r
+    JOIN seasons s ON r.season_id = s.id
+    WHERE r.id = ? AND s.group_id = ?
+  `).get(roll_id, req.groupId);
+  if (!roll) return res.status(403).json({ error: 'Roll not found in your group' });
+
   let anilist_id = null;
   let anilist_data = null;
   let total_episodes = null;
   try {
     const results = await searchAnime(anime_title);
     if (results.length > 0) {
-      const media = results[0];
-      const formatted = formatAnimeData(media);
+      const formatted = formatAnimeData(results[0]);
       anilist_id = formatted.anilist_id;
       anilist_data = JSON.stringify(formatted);
       total_episodes = formatted.episodes;
     }
   } catch (e) { console.warn('AniList lookup failed:', e.message); }
 
-  const stmt = db.prepare(`
+  const result = db.prepare(`
     INSERT INTO assignments (roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data, total_episodes)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data, total_episodes);
+  `).run(roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data, total_episodes);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
-// PATCH /api/assignments/:id — update rating, progress, status, notes
+// PATCH /api/assignments/:id
 router.patch('/:id', (req, res) => {
+  // Verify assignment belongs to this group before updating
+  const existing = db.prepare(`
+    SELECT a.id FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE a.id = ? AND s.group_id = ?
+  `).get(req.params.id, req.groupId);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
   const { rating, episodes_watched, status, notes, anilist_id } = req.body;
   const fields = [];
   const vals = [];
-
-  if (rating !== undefined)           { fields.push('rating = ?');            vals.push(rating); }
-  if (episodes_watched !== undefined) { fields.push('episodes_watched = ?');  vals.push(episodes_watched); }
-  if (status !== undefined)           { fields.push('status = ?');             vals.push(status); }
-  if (notes !== undefined)            { fields.push('notes = ?');              vals.push(notes); }
-  if (anilist_id !== undefined)       { fields.push('anilist_id = ?');         vals.push(anilist_id); }
-
+  if (rating !== undefined)           { fields.push('rating = ?');           vals.push(rating); }
+  if (episodes_watched !== undefined) { fields.push('episodes_watched = ?'); vals.push(episodes_watched); }
+  if (status !== undefined)           { fields.push('status = ?');           vals.push(status); }
+  if (notes !== undefined)            { fields.push('notes = ?');            vals.push(notes); }
+  if (anilist_id !== undefined)       { fields.push('anilist_id = ?');       vals.push(anilist_id); }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
   fields.push('updated_at = CURRENT_TIMESTAMP');
   vals.push(req.params.id);
-
   db.prepare(`UPDATE assignments SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
   res.json({ ok: true });
 });
 
-// POST /api/assignments/:id/refresh-anilist — re-fetch AniList data
+// POST /api/assignments/:id/refresh-anilist
 router.post('/:id/refresh-anilist', async (req, res) => {
-  const row = db.prepare('SELECT * FROM assignments WHERE id = ?').get(req.params.id);
+  const row = db.prepare(`
+    SELECT a.* FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE a.id = ? AND s.group_id = ?
+  `).get(req.params.id, req.groupId);
   if (!row) return res.status(404).json({ error: 'Not found' });
 
   try {
@@ -116,7 +128,8 @@ router.post('/:id/refresh-anilist', async (req, res) => {
     const formatted = formatAnimeData(media);
     const correctedTitle = formatted.title_english || formatted.title_romaji || row.anime_title;
     db.prepare(`
-      UPDATE assignments SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
+      UPDATE assignments
+      SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(correctedTitle, formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
     res.json(formatted);
@@ -125,29 +138,30 @@ router.post('/:id/refresh-anilist', async (req, res) => {
   }
 });
 
-// POST /api/assignments/bulk-refresh-anilist?season_id= — backfill AniList data for seeded rows
-// Accepts optional season_id query param to limit scope. Rate-limited: 1 req/700ms to respect AniList.
+// POST /api/assignments/bulk-refresh-anilist?season_id=
 router.post('/bulk-refresh-anilist', async (req, res) => {
   const { season_id } = req.query;
-  let sql = 'SELECT id, anime_title, anilist_id FROM assignments WHERE anilist_data IS NULL';
-  const params = [];
-  if (season_id) {
-    sql += ' AND roll_id IN (SELECT id FROM rolls WHERE season_id = ?)';
-    params.push(season_id);
-  }
-  sql += ' ORDER BY id LIMIT 200';
+
+  // Only allow bulk refresh on seasons belonging to this group
+  let sql = `
+    SELECT a.id, a.anime_title, a.anilist_id FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE a.anilist_data IS NULL AND s.group_id = ?
+  `;
+  const params = [req.groupId];
+  if (season_id) { sql += ' AND r.season_id = ?'; params.push(season_id); }
+  sql += ' ORDER BY a.id LIMIT 200';
   const rows = db.prepare(sql).all(...params);
 
   if (!rows.length) return res.json({ updated: 0, skipped: 0 });
 
-  // Stream progress via SSE so the admin page can show a live counter
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.flushHeaders();
 
   let updated = 0;
   let skipped = 0;
-
   const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
   for (const row of rows) {
@@ -163,7 +177,8 @@ router.post('/bulk-refresh-anilist', async (req, res) => {
       const formatted = formatAnimeData(media);
       const correctedTitle = formatted.title_english || formatted.title_romaji || row.anime_title;
       db.prepare(`
-        UPDATE assignments SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
+        UPDATE assignments
+        SET anime_title = ?, anilist_id = ?, anilist_data = ?, total_episodes = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(correctedTitle, formatted.anilist_id, JSON.stringify(formatted), formatted.episodes, row.id);
       updated++;
@@ -172,12 +187,23 @@ router.post('/bulk-refresh-anilist', async (req, res) => {
       skipped++;
       send({ type: 'error', title: row.anime_title, error: e.message });
     }
-    // Respect AniList rate limit (~90 req/min)
     await new Promise(r => setTimeout(r, 700));
   }
 
   send({ type: 'done', updated, skipped });
   res.end();
+});
+
+router.delete('/:id', (req, res) => {
+  const existing = db.prepare(`
+    SELECT a.id FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE a.id = ? AND s.group_id = ?
+  `).get(req.params.id, req.groupId);
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM assignments WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
 });
 
 export default router;
