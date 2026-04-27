@@ -160,32 +160,16 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
 
       {editing && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-          <div className="grid-4" style={{ gap: 10 }}>
-            <div>
-              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Rating (0–10)</label>
-              <input type="number" min="0" max="10" step="0.5" value={draft.rating}
-                onChange={e => setDraft(d => ({ ...d, rating: e.target.value }))} placeholder="—" />
-            </div>
-            <div>
-              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Episodes Watched</label>
-              <input type="number" min="0" value={draft.episodes_watched}
-                onChange={e => setDraft(d => ({ ...d, episodes_watched: e.target.value }))} placeholder="—" />
-            </div>
-            <div>
-              <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Status</label>
-              <select value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value }))}>
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "flex", alignItems: "flex-end" }}>
-              <button className="btn btn-primary" style={{ width: "100%" }} onClick={save} disabled={saving}>
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
           <div style={{ marginTop: 8 }}>
             <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Notes</label>
             <input value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} placeholder="Any thoughts..." />
+          </div>
+          <div className="grid-4" style={{ gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "flex-end" }}>
+              <button className="btn btn-primary" style={{ width: "100%", marginTop: "5px" }} onClick={save} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
