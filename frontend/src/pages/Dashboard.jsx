@@ -224,12 +224,6 @@ export default function Dashboard() {
         <div>
           <div className="section-header">
             <h2>{authMember?.group_name ?? "Members"}</h2>
-            {authMember && (
-              <div className="flex items-center gap-8">
-                <MemberAvatar member={authMember} />
-                <span className="text-muted" style={{ fontSize: "0.8rem" }}>{authMember.name}</span>
-              </div>
-            )}
           </div>
           <div className="flex flex-col gap-8">
             {members.map(m => (
