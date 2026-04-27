@@ -13,7 +13,6 @@ router.get("/anilist", (req, res) => {
   res.redirect(url);
 });
 
-// Returns the current session's member + group info
 router.get("/me", (req, res) => {
   if (!req.session.memberId) return res.status(401).json({ error: "Not logged in" });
   const member = db.prepare(`
@@ -31,7 +30,6 @@ router.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-// Step 2: AniList redirects back here with ?code=
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).json({ error: "No code provided" });
@@ -40,7 +38,6 @@ router.get("/callback", async (req, res) => {
     client_secret: CLIENT_SECRET ? `${CLIENT_SECRET.slice(0, 4)}...` : "MISSING",
     redirect_uri: REDIRECT_URI,
   });
-  // Exchange code for token
   const tokenRes = await fetch("https://anilist.co/api/v2/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -58,7 +55,6 @@ router.get("/callback", async (req, res) => {
     return res.status(500).json({ error: "Token exchange failed" });
   }
 
-  // Fetch their AniList profile
   const profileRes = await fetch("https://graphql.anilist.co", {
     method: "POST",
     headers: {
@@ -73,7 +69,6 @@ router.get("/callback", async (req, res) => {
   const viewer = profileRes.data?.Viewer;
   if (!viewer) return res.status(500).json({ error: "Could not fetch AniList profile" });
 
-  // Look up existing member by anilist_username
   const member = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
 
   // ── CLOSED REGISTRATION ──────────────────────────────────────────────────
@@ -84,12 +79,10 @@ router.get("/callback", async (req, res) => {
     return res.redirect(`${process.env.FRONTEND_URL}/not-invited`);
   }
 
-  // Update their token and avatar in case they've changed
   db.prepare(`
     UPDATE members SET anilist_token = ?, anilist_id = ?, avatar_url = ? WHERE id = ?
   `).run(tokenRes.access_token, viewer.id, viewer.avatar?.large, member.id);
 
-  // Also upsert into users table (source of truth for auth)
   db.prepare(`
     INSERT INTO users (id, anilist_id, anilist_token, username, avatar_url)
     VALUES (?, ?, ?, ?, ?)
@@ -104,7 +97,6 @@ router.get("/callback", async (req, res) => {
     viewer.avatar?.large,
   );
 
-  // Set session — include groupId so middleware doesn't query it every request
   req.session.memberId  = member.id;
   req.session.memberName = member.name;
   req.session.groupId   = member.group_id;  // null if not in a group yet

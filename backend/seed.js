@@ -104,14 +104,12 @@ function parseTitleCell(raw) {
   if (!match) return { title: raw.trim(), assignerId: null };
   const title = match[1].trim();
   const assignerRaw = match[2].trim().toLowerCase();
-  // fuzzy map short names
   const map = { jsn: 'jsn', olx: 'olx', drnz: 'drnz', dim: 'dim', hdrk: 'hdrk',
                  hnrk: 'hdrk', jay: 'jsn', tim: 'dim', timmay: 'dim',
                  aleksay: 'dim', terray: 'jsn', tom: 'olx' };
   return { title, assignerId: map[assignerRaw] || assignerRaw };
 }
 
-/** Parse date from "1. Woche (17.11.2020)" */
 function parseRollDate(label) {
   const m = label?.match(/(\d{1,2}\.\d{1,2}\.\d{4})/);
   if (!m) return null;
@@ -167,12 +165,11 @@ for (let si = 0; si < SEASON_SHEETS.length; si++) {
       const rating = typeof rawRating === 'number' ? rawRating : null;
       const status = rating != null ? 'completed' : 'pending';
 
-      // assignee = the member in this column, assigner = extracted from title
       try {
         insertAssignment.run(
         rollId,
         col.id,
-        parsed.assignerId || col.id,   // fallback: self (will be cleaned up)
+        parsed.assignerId || col.id,
         parsed.title,
         rating,
         status,

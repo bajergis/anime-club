@@ -4,7 +4,6 @@ import { requireAuth, requireGroupMember } from '../middleware/auth.js';
 
 const router = Router();
 
-// All members routes require auth + group membership
 router.use(requireAuth, requireGroupMember);
 
 // GET /api/members — only members in the current user's group

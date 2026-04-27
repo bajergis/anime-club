@@ -67,7 +67,6 @@ export default function Dashboard() {
         setCurrentRollId(lastRoll.id);
         setCurrentRollState(lastRoll.state ?? season.currentRollState);
 
-        // Only fetch assignments if the roll is active or completed
         if (lastRoll.state === "active" || lastRoll.state === "completed" || !lastRoll.state) {
           fetch(`${API}/assignments?roll_id=${lastRoll.id}`, { credentials: "include" })
             .then(r => r.json())

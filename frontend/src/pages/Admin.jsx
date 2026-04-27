@@ -114,11 +114,9 @@ function ManualRollBuilder({ season, members, onRollAdded }) {
     let roll_number;
 
     if (mode === "existing") {
-      // Use the selected existing roll
       roll_id = selectedRollId;
       roll_number = existingRolls.find(r => String(r.id) === selectedRollId)?.roll_number;
     } else {
-      // Create a new roll
       const rollRes = await fetch(`${API}/seasons/${season.id}/rolls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -5,7 +5,6 @@ import { generateDerangement } from '../services/derangement.js';
 
 const router = Router();
 
-// All seasons routes require auth + group membership
 router.use(requireAuth, requireGroupMember);
 
 // GET /api/seasons
@@ -30,7 +29,6 @@ router.get('/active', (req, res) => {
     'SELECT * FROM rolls WHERE season_id = ? ORDER BY roll_number'
   ).all(season.id);
 
-  // Expose current roll state so frontend can gate new roll creation correctly
   const currentRoll = rolls.length ? rolls[rolls.length - 1] : null;
   const currentRollState = currentRoll?.state ?? null;
 
@@ -40,7 +38,6 @@ router.get('/active', (req, res) => {
 // POST /api/seasons
 router.post('/', (req, res) => {
   const { name, started_at, roll_count } = req.body;
-  // Deactivate existing active season for this group only
   db.prepare('UPDATE seasons SET is_active = 0 WHERE group_id = ?').run(req.groupId);
   const result = db.prepare(
     'INSERT INTO seasons (name, started_at, roll_count, is_active, group_id) VALUES (?, ?, ?, 1, ?)'
@@ -55,7 +52,6 @@ router.post('/', (req, res) => {
 
 // GET /api/seasons/:id/rolls
 router.get('/:id/rolls', (req, res) => {
-  // Verify season belongs to this group
   const season = db.prepare(
     'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
   ).get(req.params.id, req.groupId);

@@ -8,12 +8,7 @@ export function requireAuth(req, res, next) {
   next();
 }
 
-// Rejects requests where the logged-in member is not in the group
-// that owns the resource being accessed.
-//
-// Expects the route to have a :groupId param, OR falls back to
-// req.session.groupId (set at login) for routes scoped implicitly
-// to the current user's group.
+// Rejects requests where the logged-in member is not in the group that owns the resource being accessed.
 export function requireGroupMember(req, res, next) {
   if (!req.session.memberId) {
     return res.status(401).json({ error: 'Not logged in' });
@@ -34,7 +29,6 @@ export function requireGroupMember(req, res, next) {
     return res.status(403).json({ error: 'Not a member of this group' });
   }
 
-  // Attach to req so downstream handlers don't have to re-derive it
   req.groupId = Number(groupId);
   next();
 }

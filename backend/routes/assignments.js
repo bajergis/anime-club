@@ -82,7 +82,6 @@ router.post('/', async (req, res) => {
 
 // PATCH /api/assignments/:id
 router.patch('/:id', (req, res) => {
-  // Verify assignment belongs to this group before updating
   const existing = db.prepare(`
     SELECT a.id FROM assignments a
     JOIN rolls r ON a.roll_id = r.id
@@ -142,7 +141,6 @@ router.post('/:id/refresh-anilist', async (req, res) => {
 router.post('/bulk-refresh-anilist', async (req, res) => {
   const { season_id } = req.query;
 
-  // Only allow bulk refresh on seasons belonging to this group
   let sql = `
     SELECT a.id, a.anime_title, a.anilist_id FROM assignments a
     JOIN rolls r ON a.roll_id = r.id

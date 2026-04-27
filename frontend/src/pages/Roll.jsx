@@ -707,7 +707,6 @@ function ActiveView({ rollId, rollNumber, seasonName, rollState }) {
       setAssignments(data);
       setMembers(mems);
       setLoading(false);
-      // Auto-sync on load UNCOMMENT BEFORE PUSH
       setSyncing(true);
       const updates = await syncAniListProgress(data, mems);
       if (updates.length) {
@@ -838,7 +837,6 @@ export default function Roll() {
   const rollNumber = roll?.roll_number;
   const seasonName = roll?.season_name;
 
-  // When all select and roll becomes active, redirect to refresh the active view
   function handleRevealed() {
     fetchStatus();
   }
@@ -870,7 +868,6 @@ export default function Roll() {
     );
   }
 
-  // active or completed
   return (
     <ActiveView
       rollId={id}
