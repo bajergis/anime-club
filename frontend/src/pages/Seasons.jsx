@@ -91,194 +91,72 @@ function SeasonCompleteBanner({ onStartNewSeason }) {
   );
 }
 
-function NewRollPanel({ seasonId, members, onRollCreated }) {
-  const [selectedMembers, setSelectedMembers] = useState(members.map(m => m.id));
+function NewRollPanel({ seasonId, onRollCreated }) {
   const [rollDate, setRollDate] = useState(new Date().toISOString().split("T")[0]);
-  const [result, setResult] = useState(null);
-  const [rolling, setRolling] = useState(false);
-  const [animeTitles, setAnimeTitles] = useState({});
-  const [submitting, setSubmitting] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    setSelectedMembers(members.map(m => m.id));
-  }, [members]);
-
-  function toggleMember(id) {
-    setSelectedMembers(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-    setResult(null);
-  }
-
-  async function generateRoll() {
-    if (selectedMembers.length < 2) return;
-    setRolling(true);
+  async function createRoll() {
+    setCreating(true);
     const data = await fetch(`${API}/seasons/${seasonId}/rolls`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ member_ids: selectedMembers, roll_date: rollDate }),
+      body: JSON.stringify({ roll_date: rollDate }),
       credentials: "include",
     }).then(r => r.json());
-    setResult(data);
-    setAnimeTitles({});
-    setRolling(false);
+    setCreating(false);
+    if (data.roll_id) onRollCreated(data.roll_id);
   }
-
-  async function submitAssignments() {
-    if (!result) return;
-    const { roll_id, derangement } = result;
-    const entries = Object.entries(derangement);
-    setSubmitting(true);
-    for (const [assignerId, assigneeId] of entries) {
-      const title = animeTitles[assigneeId];
-      if (!title?.trim()) continue;
-      await fetch(`${API}/assignments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roll_id, assignee_id: assigneeId, assigner_id: assignerId, anime_title: title }),
-        credentials: "include",
-      });
-    }
-    setSubmitting(false);
-    setResult(null);
-    setAnimeTitles({});
-    onRollCreated(roll_id);
-  }
-
-  const memberMap = Object.fromEntries(members.map(m => [m.id, m.name]));
-  const allTitlesEntered = result
-    ? Object.values(result.derangement).every(assigneeId => animeTitles[assigneeId]?.trim())
-    : false;
 
   return (
     <div className="card">
-      <h2 className="mb-16">Generate New Roll</h2>
-
-      <div className="mb-16">
-        <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>
-          Participating Members
-        </label>
-        <div className="flex gap-8" style={{ flexWrap: "wrap" }}>
-          {members.map(m => (
-            <button
-              key={m.id}
-              className={`btn ${selectedMembers.includes(m.id) ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => toggleMember(m.id)}
-              style={{ minWidth: 80 }}
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
+      <h2 className="mb-8">Start New Roll</h2>
+      <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
+        Creating a roll opens a lobby where members lock in before assignments are generated.
       </div>
-
-      <div className="flex gap-8 mb-16" style={{ alignItems: "flex-end" }}>
+      <div className="flex gap-8" style={{ alignItems: "flex-end" }}>
         <div>
           <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
             Roll Date
           </label>
           <input type="date" value={rollDate} onChange={e => setRollDate(e.target.value)} style={{ width: 180 }} />
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={generateRoll}
-          disabled={rolling || selectedMembers.length < 2 || !!result}
-        >
-          {rolling ? "Rolling..." : "🎲 Roll Derangement"}
+        <button className="btn btn-primary" onClick={createRoll} disabled={creating}>
+          {creating ? "Creating..." : "🎲 Create Roll Lobby"}
         </button>
-        {result && (
-          <button className="btn btn-ghost" onClick={() => setResult(null)}>
-            Re-roll
-          </button>
-        )}
       </div>
-
-      {result && (
-        <div>
-          <div className="divider" />
-          <h3 className="mb-16">Roll #{result.roll_number} — Enter Anime Picks</h3>
-          <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
-            Each assigner picks an anime for their assigned person. Enter the title below.
-          </div>
-          <div className="flex flex-col gap-12">
-            {Object.entries(result.derangement).map(([assignerId, assigneeId]) => (
-              <div key={assignerId} className="flex items-center gap-12" style={{ background: "var(--bg3)", borderRadius: "var(--radius)", padding: "12px 16px" }}>
-                <div style={{ minWidth: 120 }}>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Assigner</div>
-                  <div style={{ color: "var(--accent2)", fontWeight: 600 }}>{memberMap[assignerId]}</div>
-                </div>
-                <div style={{ fontSize: "1.2rem", color: "var(--border)" }}>→</div>
-                <div style={{ minWidth: 120 }}>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Picks for</div>
-                  <div style={{ color: "var(--accent)", fontWeight: 600 }}>{memberMap[assigneeId]}</div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <input
-                    value={animeTitles[assigneeId] || ""}
-                    onChange={e => setAnimeTitles(t => ({ ...t, [assigneeId]: e.target.value }))}
-                    placeholder={`Anime for ${memberMap[assigneeId]}...`}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-8 mt-16" style={{ justifyContent: "flex-end" }}>
-            <div className="text-muted" style={{ fontSize: "0.75rem", alignSelf: "center" }}>
-              {Object.values(animeTitles).filter(t => t?.trim()).length}/{Object.keys(result.derangement).length} titles entered
-            </div>
-            <button
-              className="btn btn-primary"
-              onClick={submitAssignments}
-              disabled={submitting || !allTitlesEntered}
-            >
-              {submitting ? "Saving..." : "Save Assignments"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// Determines the state of the active season's rolls:
-//   "in_progress"    — current roll not yet finished
-//   "ready_for_roll" — last roll done, season has rolls remaining
-//   "season_complete" — all rolls for the season are done
-async function getSeasonRollState(active) {
+function getSeasonRollState(active) {
   if (!active) return null;
-
-  const rollCount = active.roll_count ?? Infinity; // fall back gracefully if field missing
-  const completedRolls = active.rolls ?? [];
-
-  if (completedRolls.length === 0) return "ready_for_roll";
-
-  const lastRoll = completedRolls[completedRolls.length - 1];
-  const assignments = await fetch(`${API}/assignments?roll_id=${lastRoll.id}`, { credentials: "include" }).then(r => r.json());
-  const lastRollDone = assignments.length > 0 && assignments.every(a => a.status === "completed" || a.status === "dropped");
-
-  if (!lastRollDone) return "in_progress";
-  if (completedRolls.length >= rollCount) return "season_complete";
+  const rollCount = active.roll_count ?? Infinity;
+  const rolls = active.rolls ?? [];
+  if (rolls.length === 0) return "ready_for_roll";
+  const currentRollState = active.currentRollState;
+  if (currentRollState && currentRollState !== "completed") return "in_progress";
+  if (rolls.length >= rollCount) return "season_complete";
   return "ready_for_roll";
 }
 
 export default function Seasons() {
   const [seasons, setSeasons] = useState([]);
-  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  // "in_progress" | "ready_for_roll" | "season_complete" | null
   const [rollState, setRollState] = useState(null);
+  const [currentRollId, setCurrentRollId] = useState(null);
   const [showNewSeason, setShowNewSeason] = useState(false);
   const navigate = useNavigate();
 
   function load() {
     Promise.all([
       fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.json()),
-      fetch(`${API}/members`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
       fetch(`${API}/seasons/active`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
-    ]).then(async ([s, m, active]) => {
+    ]).then(([s, active]) => {
       setSeasons(s);
-      setMembers(m);
-      setRollState(await getSeasonRollState(active));
+      setRollState(getSeasonRollState(active));
+      if (active?.rolls?.length) {
+        setCurrentRollId(active.rolls[active.rolls.length - 1].id);
+      }
       setLoading(false);
     });
   }
@@ -286,9 +164,7 @@ export default function Seasons() {
   useEffect(() => { load(); }, []);
 
   const activeSeason = seasons.find(s => s.is_active);
-
-  // Roll progress label for the active season header, e.g. "Roll 2 / 4"
-  const rollProgressLabel = activeSeason && activeSeason.roll_count
+  const rollProgressLabel = activeSeason?.roll_count
     ? `Roll ${activeSeason.rolls_completed ?? 0} / ${activeSeason.roll_count}`
     : null;
 
@@ -298,7 +174,6 @@ export default function Seasons() {
     <div>
       <div className="section-header mb-24">
         <h1>Seasons</h1>
-        {/* Only show manual New Season button when there's no active season */}
         {!activeSeason && (
           <button className="btn btn-primary" onClick={() => setShowNewSeason(s => !s)}>
             {showNewSeason ? "Cancel" : "+ New Season"}
@@ -306,11 +181,10 @@ export default function Seasons() {
         )}
       </div>
 
-      {showNewSeason && (
+      {showNewSeason && !activeSeason && (
         <NewSeasonForm onCreated={() => { setShowNewSeason(false); load(); }} />
       )}
 
-      {/* Active season roll area */}
       {activeSeason && (
         <div className="mb-24">
           <div className="flex gap-12 mb-8" style={{ alignItems: "center" }}>
@@ -336,20 +210,25 @@ export default function Seasons() {
           {rollState === "ready_for_roll" && (
             <NewRollPanel
               seasonId={activeSeason.id}
-              members={members}
               onRollCreated={(rollId) => navigate(`/roll/${rollId}`)}
             />
           )}
 
-          {rollState === "in_progress" && (
+          {rollState === "in_progress" && currentRollId && (
             <div className="card" style={{ textAlign: "center", padding: 32 }}>
-              <div className="text-muted">Current roll must be completed or dropped before generating a new one.</div>
+              <div className="text-muted mb-16">A roll is currently in progress.</div>
+              <Link to={`/roll/${currentRollId}`} className="btn btn-primary">
+                Go to Current Roll →
+              </Link>
             </div>
           )}
         </div>
       )}
 
-      {/* No active season and form not shown */}
+      {activeSeason && showNewSeason && (
+        <NewSeasonForm onCreated={() => { setShowNewSeason(false); load(); }} />
+      )}
+
       {!activeSeason && !showNewSeason && (
         <div className="card mb-24" style={{ textAlign: "center", padding: 32 }}>
           <div className="text-muted mb-16">No active season. Start one to begin rolling!</div>
@@ -357,12 +236,6 @@ export default function Seasons() {
         </div>
       )}
 
-      {/* New season form triggered from banner (active season present) */}
-      {activeSeason && showNewSeason && (
-        <NewSeasonForm onCreated={() => { setShowNewSeason(false); load(); }} />
-      )}
-
-      {/* All seasons */}
       <div className="section-header mb-16">
         <h2>All Seasons</h2>
       </div>

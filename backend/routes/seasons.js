@@ -22,16 +22,25 @@ router.get('/', (req, res) => {
 
 // GET /api/seasons/active
 router.get('/active', (req, res) => {
-  const season = db.prepare('SELECT * FROM seasons WHERE is_active = 1 AND group_id = ? LIMIT 1').get(req.groupId);
+  const season = db.prepare(
+    'SELECT * FROM seasons WHERE is_active = 1 AND group_id = ? LIMIT 1'
+  ).get(req.groupId);
   if (!season) return res.status(404).json({ error: 'No active season' });
-  const rolls = db.prepare('SELECT * FROM rolls WHERE season_id = ? ORDER BY roll_number').all(season.id);
-  res.json({ ...season, rolls });
+  const rolls = db.prepare(
+    'SELECT * FROM rolls WHERE season_id = ? ORDER BY roll_number'
+  ).all(season.id);
+
+  // Expose current roll state so frontend can gate new roll creation correctly
+  const currentRoll = rolls.length ? rolls[rolls.length - 1] : null;
+  const currentRollState = currentRoll?.state ?? null;
+
+  res.json({ ...season, rolls, currentRollState });
 });
 
 // POST /api/seasons
 router.post('/', (req, res) => {
   const { name, started_at, roll_count } = req.body;
-  // Deactivate existing active season
+  // Deactivate existing active season for this group only
   db.prepare('UPDATE seasons SET is_active = 0 WHERE group_id = ?').run(req.groupId);
   const result = db.prepare(
     'INSERT INTO seasons (name, started_at, roll_count, is_active, group_id) VALUES (?, ?, ?, 1, ?)'
@@ -92,6 +101,7 @@ router.delete('/:id/rolls/:rollId', (req, res) => {
     'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
   ).get(req.params.id, req.groupId);
   if (!season) return res.status(404).json({ error: 'Season not found' });
+
   db.prepare('DELETE FROM assignments WHERE roll_id = ?').run(req.params.rollId);
   db.prepare('DELETE FROM derangement_history WHERE roll_id = ?').run(req.params.rollId);
   db.prepare('DELETE FROM rolls WHERE id = ? AND season_id = ?').run(req.params.rollId, req.params.id);
@@ -119,23 +129,21 @@ router.post('/:id/rolls', (req, res) => {
   }
 
   const rollResult = db.prepare(
-    'INSERT INTO rolls (season_id, roll_number, roll_date) VALUES (?, ?, ?)'
-  ).run(req.params.id, roll_number, roll_date || new Date().toISOString().split('T')[0]);
+    'INSERT INTO rolls (season_id, roll_number, roll_date, state) VALUES (?, ?, ?, ?)'
+  ).run(
+    req.params.id,
+    roll_number,
+    roll_date || new Date().toISOString().split('T')[0],
+    skip_derangement ? 'active' : 'drafting',
+  );
   const roll_id = rollResult.lastInsertRowid;
 
   if (skip_derangement) {
     return res.status(201).json({ roll_id, roll_number, derangement: {} });
   }
 
-  if (!member_ids || member_ids.length < 2)
-    return res.status(400).json({ error: 'Need at least 2 member_ids for derangement' });
-
-  const derangement = generateDerangement(member_ids);
-  db.prepare(
-    'INSERT INTO derangement_history (season_id, roll_id, result) VALUES (?, ?, ?)'
-  ).run(req.params.id, roll_id, JSON.stringify(derangement));
-
-  res.status(201).json({ roll_id, roll_number, derangement });
+  // New flow: roll starts in drafting, derangement runs later via /rolls/:id/generate
+  res.status(201).json({ roll_id, roll_number });
 });
 
 export default router;

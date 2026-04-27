@@ -15,6 +15,7 @@ import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
 import { db } from './db.js';
 import connectSqlite3 from "connect-sqlite3";
+import rollsRouter from './routes/rolls.js';
 
 const SQLiteStore = connectSqlite3(session);
 const app = express();
@@ -51,6 +52,7 @@ app.use(session({
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/anime', animeRouter);
 app.use('/api/members', membersRouter);
+app.use('/api/rolls', rollsRouter);
 app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
