@@ -31,6 +31,11 @@ router.post("/logout", (req, res) => {
 });
 
 router.get("/callback", async (req, res) => {
+  console.log("Callback hit:", {
+    code: req.query.code?.slice(0, 8) + "...",
+    ip: req.ip,
+    headers: req.headers,
+  });
   const { code } = req.query;
   if (!code) return res.status(400).json({ error: "No code provided" });
   console.log("Token exchange:", {
