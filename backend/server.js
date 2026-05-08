@@ -30,7 +30,20 @@ const DB_PATH = process.env.NODE_ENV === "production"
   ? "/app/data/anime-club.db"
   : "./data/anime-club.db";
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "*.anilist.co", "*.anilistcdn.net"],
+      connectSrc: ["'self'", "https://graphql.anilist.co", "https://anilist.co"],
+      fontSrc: ["'self'", "data:"],
+      frameSrc: ["'none'"],
+    }
+  }
+}));
+
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
