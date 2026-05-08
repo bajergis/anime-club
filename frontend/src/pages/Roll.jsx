@@ -692,7 +692,7 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
   );
 }
 
-function ActiveView({ rollId, rollNumber, seasonName, rollState }) {
+function ActiveView({ rollId, rollNumber, seasonName, rollState, seasonId }) {
   const [assignments, setAssignments] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -787,6 +787,9 @@ function ActiveView({ rollId, rollNumber, seasonName, rollState }) {
                   synced {lastSynced.toLocaleTimeString()}
                 </div>
               )}
+              <Link to={`/season/${seasonId}`} className="btn btn-ghost btn-sm" onClick={e => e.stopPropagation()}>
+                To Season →
+              </Link>
             </div>
           </div>
         </div>
@@ -874,6 +877,7 @@ export default function Roll() {
       rollNumber={rollNumber}
       seasonName={seasonName}
       rollState={state}
+      seasonId={roll?.season_id}
     />
   );
 }

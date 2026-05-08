@@ -106,6 +106,7 @@ export default function Stats() {
 
   const tabs = [
     { id: "members", label: "Per Member" },
+    { id: "seasons", label: "Per Season"},
     { id: "h2h", label: "Head-to-Head" },
   ];
 
