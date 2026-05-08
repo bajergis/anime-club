@@ -16,7 +16,11 @@ import authRouter from './routes/auth.js';
 import { db } from './db.js';
 import connectSqlite3 from "connect-sqlite3";
 import rollsRouter from './routes/rolls.js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQLiteStore = connectSqlite3(session);
 const app = express();
 app.set("trust proxy", 1);
@@ -44,7 +48,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
     maxAge: 1000 * 60 * 60 * 24 * 30,
   }
 }));
@@ -58,6 +62,15 @@ app.use('/api/stats', statsRouter);
 app.use('/auth', authRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// ── Serve frontend ────────────────────────────────────────────────────────────
+const frontendPath = join(__dirname, '../frontend/dist');
+if (existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+  app.get('*', (req, res) => {
+    res.sendFile(join(frontendPath, 'index.html'));
+  });
+}
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {

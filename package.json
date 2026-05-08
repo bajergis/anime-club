@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "node backend/server.js"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "express-session": "^1.19.0"
