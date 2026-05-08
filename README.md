@@ -1,8 +1,8 @@
-# Bois Anime Club
+# AniRoll
 
-A full-stack web application for tracking a friend group's anime assignment rotation — built as a portfolio project demonstrating Kubernetes-native application design.
+A full-stack web application for tracking a friend group's anime assignment rotation — built as a portfolio project demonstrating application design.
 
-**Live:** `https://anime.yourapp.dev` &nbsp;|&nbsp; **Stack:** Node.js · React · SQLite · Kubernetes · GitHub Actions
+**Live:** `https://aniroll.co` &nbsp;|&nbsp; **Stack:** Node.js · React · SQLite · Kubernetes · GitHub Actions
 
 ---
 
@@ -15,8 +15,6 @@ Each roll, a weighted derangement algorithm assigns every participating member t
 - Genre affinity breakdown across seasons
 - Season best/worst shows and averages
 - Completion/drop rates per member
-
-Historical data spans **4 seasons (2020–present)**, imported from the original Excel tracker.
 
 ---
 

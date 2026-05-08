@@ -26,7 +26,7 @@ function Nav() {
     <nav className="sidebar">
       <div className="sidebar-logo">
         <img src={logo} alt="番" className="logo-mark" />
-        <span className="logo-text">Bois<br />Anime</span>
+        <span className="logo-text">AniRoll</span>
       </div>
       <ul className="nav-links">
         {links.map(l => (
@@ -71,7 +71,21 @@ function Nav() {
             Login with AniList
           </a>
         )}
-        <span className="version" style={{ marginTop: 8, display: "block" }}>S4 · 2026</span>
+        <span className="version" style={{ marginTop: 8, display: "block" }}>2026</span>
+        <a
+          href="/privacy.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            marginTop: 6,
+            display: "block",
+            fontSize: "0.75rem",
+            color: "var(--text2)",
+            textDecoration: "none"
+          }}
+        >
+          Privacy Policy
+        </a>
       </div>
     </nav>
   );
@@ -117,7 +131,7 @@ function LoginPage() {
   if (member) return <Navigate to="/" replace />;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16 }}>
-      <h1>Bois Anime</h1>
+      <h1>AniRoll</h1>
       <p className="text-muted">Sign in to access the club.</p>
       <a href={`${authBase}/auth/anilist`} className="btn btn-primary">
         Login with AniList
