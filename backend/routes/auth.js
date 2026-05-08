@@ -101,8 +101,14 @@ router.get("/callback", async (req, res) => {
   req.session.memberName = member.name;
   req.session.groupId   = member.group_id;  // null if not in a group yet
 
-  console.log(`Login: ${viewer.name} → member ${member.id}, group ${member.group_id}`);
-  res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
+  req.session.save(err => {
+    if (err) {
+      console.error("Session save failed:", err);
+      return res.status(500).json({ error: "Session save failed" });
+    }
+    console.log(`Login: ${viewer.name} → member ${member.id}, group ${member.group_id}`);
+    res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
+  });
 });
 
 export default router;
