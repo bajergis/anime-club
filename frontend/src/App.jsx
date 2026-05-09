@@ -86,6 +86,20 @@ function Nav() {
         >
           Privacy Policy
         </a>
+        <a
+          href="/terms.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            marginTop: 6,
+            display: "block",
+            fontSize: "0.75rem",
+            color: "var(--text2)",
+            textDecoration: "none"
+          }}
+        >
+          Terms of Service
+        </a>
       </div>
     </nav>
   );
