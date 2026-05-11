@@ -93,6 +93,8 @@ function SeasonCompleteBanner({ onStartNewSeason }) {
 
 function NewRollPanel({ seasonId, onRollCreated }) {
   const [rollDate, setRollDate] = useState(new Date().toISOString().split("T")[0]);
+  const [useTitle, setUseTitle] = useState(false);
+  const [rollTitle, setRollTitle] = useState("");
   const [creating, setCreating] = useState(false);
 
   async function createRoll() {
@@ -100,7 +102,10 @@ function NewRollPanel({ seasonId, onRollCreated }) {
     const data = await fetch(`${API}/seasons/${seasonId}/rolls`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roll_date: rollDate }),
+      body: JSON.stringify({
+          roll_date: rollDate,
+          title: useTitle && rollTitle.trim() ? rollTitle.trim() : null,
+      }),
       credentials: "include",
     }).then(r => r.json());
     setCreating(false);
@@ -113,17 +118,35 @@ function NewRollPanel({ seasonId, onRollCreated }) {
       <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
         Creating a roll opens a lobby where members lock in before assignments are generated.
       </div>
-      <div className="flex gap-8" style={{ alignItems: "flex-end" }}>
+      <div className="flex gap-8 mb-12" style={{ alignItems: "flex-end" }}>
         <div>
           <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
             Roll Date
           </label>
           <input type="date" value={rollDate} onChange={e => setRollDate(e.target.value)} style={{ width: 180 }} />
         </div>
-        <button className="btn btn-primary" onClick={createRoll} disabled={creating}>
-          {creating ? "Creating..." : "🎲 Create Roll Lobby"}
-        </button>
       </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer", fontSize: "0.85rem" }}>
+        <input
+          type="checkbox"
+          checked={useTitle}
+          onChange={e => setUseTitle(e.target.checked)}
+          style={{ width: "auto" }}
+        />
+        Give this roll a theme / title
+      </label>
+      {useTitle && (
+        <input
+          value={rollTitle}
+          onChange={e => setRollTitle(e.target.value)}
+          placeholder="e.g. Sports Anime, Viewer's Choice..."
+          style={{ marginBottom: 12 }}
+          onKeyDown={e => e.key === "Enter" && createRoll()}
+        />
+      )}
+      <button className="btn btn-primary" onClick={createRoll} disabled={creating}>
+        {creating ? "Creating..." : "🎲 Create Roll Lobby"}
+      </button>
     </div>
   );
 }

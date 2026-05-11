@@ -106,7 +106,7 @@ router.delete('/:id/rolls/:rollId', (req, res) => {
 
 // POST /api/seasons/:id/rolls
 router.post('/:id/rolls', (req, res) => {
-  const { roll_date, member_ids, skip_derangement } = req.body;
+  const { roll_date, member_ids, skip_derangement, title } = req.body;
 
   const season = db.prepare(
     'SELECT * FROM seasons WHERE id = ? AND group_id = ?'
@@ -125,12 +125,13 @@ router.post('/:id/rolls', (req, res) => {
   }
 
   const rollResult = db.prepare(
-    'INSERT INTO rolls (season_id, roll_number, roll_date, state) VALUES (?, ?, ?, ?)'
+    'INSERT INTO rolls (season_id, roll_number, roll_date, state, title) VALUES (?, ?, ?, ?, ?)'
   ).run(
     req.params.id,
     roll_number,
     roll_date || new Date().toISOString().split('T')[0],
     skip_derangement ? 'active' : 'drafting',
+    title || null,
   );
   const roll_id = rollResult.lastInsertRowid;
 

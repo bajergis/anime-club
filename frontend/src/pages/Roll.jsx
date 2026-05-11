@@ -80,7 +80,7 @@ function ForceStartPicker({ groupMembers, generating, onGenerate }) {
 }
 
 // ── Drafting: Lock-in Lobby ───────────────────────────────────
-function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefresh }) {
+function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefresh, rollTitle }) {
   const { readiness, groupMembers, roll } = status;
   const [locking, setLocking] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -131,7 +131,11 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
             <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", marginBottom: 4 }}>
               {seasonName} · LOBBY
             </div>
-            <h1>Roll #{rollNumber}</h1>
+            <h1>Roll #{rollNumber}
+                {rollTitle && (
+                    <span style={{ color: "var(--text2)", fontWeight: 400 }}> aka "{rollTitle}"</span>
+                )}
+            </h1>
             <div className="text-muted mt-4" style={{ fontSize: "0.8rem" }}>
               Waiting for members to lock in before assignments are generated.
             </div>
@@ -218,7 +222,7 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
 }
 
 // ── Selecting: Pick from planning list ────────────────────────
-function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefresh, onRevealed }) {
+function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefresh, onRevealed, rollTitle }) {
   const { derangement, selections, groupMembers } = status;
   const [planningList, setPlanningList] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
@@ -304,7 +308,11 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
             <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", marginBottom: 4 }}>
               {seasonName} · SELECTING
             </div>
-            <h1>Roll #{rollNumber}</h1>
+            <h1>Roll #{rollNumber}
+                {rollTitle && (
+                    <span style={{ color: "var(--text2)", fontWeight: 400 }}> aka "{rollTitle}"</span>
+                )}
+            </h1>
             <div className="text-muted mt-4" style={{ fontSize: "0.8rem" }}>
               Each assigner is picking a show for their assigned member. Picks are revealed when everyone is done.
             </div>
@@ -692,7 +700,7 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
   );
 }
 
-function ActiveView({ rollId, rollNumber, seasonName, rollState, seasonId }) {
+function ActiveView({ rollId, rollNumber, seasonName, rollState, seasonId, rollTitle }) {
   const [assignments, setAssignments] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -767,7 +775,11 @@ function ActiveView({ rollId, rollNumber, seasonName, rollState, seasonId }) {
             <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", marginBottom: 4 }}>
               {seasonName}
             </div>
-            <h1>Roll #{rollNumber}</h1>
+            <h1>Roll #{rollNumber}
+                {rollTitle && (
+                    <span style={{ color: "var(--text2)", fontWeight: 400 }}> aka "{rollTitle}"</span>
+                )}
+            </h1>
           </div>
           <div className="flex gap-16" style={{ alignItems: "flex-start" }}>
             <div className="stat">
@@ -853,6 +865,7 @@ export default function Roll() {
         status={status}
         member={member}
         onRefresh={fetchStatus}
+        rollTitle={roll?.title}
       />
     );
   }
@@ -867,6 +880,7 @@ export default function Roll() {
         member={member}
         onRefresh={fetchStatus}
         onRevealed={handleRevealed}
+        rollTitle={roll?.title}
       />
     );
   }
@@ -878,6 +892,7 @@ export default function Roll() {
       seasonName={seasonName}
       rollState={state}
       seasonId={roll?.season_id}
+      rollTitle={roll?.title}
     />
   );
 }

@@ -281,6 +281,11 @@ function RollPanel({ roll, members, defaultOpen = false }) {
           <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
             {roll.assignment_count ?? 0} shows
           </div>
+          {roll.title && (
+            <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text)" }}>
+              {roll.title}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-16">

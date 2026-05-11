@@ -151,7 +151,7 @@ router.get('/season/:id', (req, res) => {
   if (!season) return res.status(404).json({ error: 'Not found' });
 
   const rollStats = db.prepare(`
-    SELECT r.id, r.roll_number, r.roll_date,
+    SELECT r.id, r.roll_number, r.roll_date, r.title,
       COUNT(a.id) AS assignment_count,
       AVG(a.rating) AS avg_rating,
       MIN(a.rating) AS min_rating,

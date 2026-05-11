@@ -231,4 +231,26 @@ router.patch('/:id/state', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── PATCH /api/rolls/:id/title ────────────────────────────────
+router.patch('/:id/title', (req, res) => {
+  const { title } = req.body;
+
+  const roll = db.prepare(`
+    SELECT r.*, s.owner_id FROM rolls r
+    JOIN seasons s ON r.season_id = s.id
+    WHERE r.id = ? AND s.group_id = ?
+  `).get(req.params.id, req.groupId);
+  if (!roll) return res.status(404).json({ error: 'Roll not found' });
+
+  const sessionMember = db.prepare(
+    'SELECT user_id FROM members WHERE id = ? AND group_id = ?'
+  ).get(req.session.memberId, req.groupId);
+  if (sessionMember?.user_id !== roll.owner_id) {
+    return res.status(403).json({ error: 'Only the group owner can set the roll title' });
+  }
+
+  db.prepare('UPDATE rolls SET title = ? WHERE id = ?').run(title || null, req.params.id);
+  res.json({ ok: true });
+});
+
 export default router;
