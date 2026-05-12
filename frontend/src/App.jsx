@@ -71,7 +71,20 @@ function Nav() {
             Login with AniList
           </a>
         )}
-        <span className="version" style={{ marginTop: 8, display: "block" }}>2026</span>
+        <a
+          href="/cookies.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            marginTop: 6,
+            display: "block",
+            fontSize: "0.75rem",
+            color: "var(--text2)",
+            textDecoration: "none"
+          }}
+        >
+          Cookie Policy
+        </a>
         <a
           href="/privacy.html"
           target="_blank"
@@ -100,6 +113,7 @@ function Nav() {
         >
           Terms of Service
         </a>
+        <span className="version" style={{ marginTop: 8, display: "block" }}>2026</span>
       </div>
     </nav>
   );
