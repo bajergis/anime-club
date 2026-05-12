@@ -42,79 +42,68 @@ function Nav() {
           </li>
         ))}
       </ul>
-      <div className="sidebar-footer">
-        {member ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {member.avatar_url && (
-              <img
-                src={member.avatar_url}
-                style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }}
-                alt={member.name}
-              />
-            )}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 600 }}>{member.name}</div>
-              <button
-                onClick={logout}
-                style={{ fontSize: "0.7rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-              >
-                logout
-              </button>
+        <div className="sidebar-footer">
+          {member ? (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 12px",
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: "var(--radius)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              marginBottom: 12,
+            }}>
+              {member.avatar_url && (
+                <img
+                  src={member.avatar_url}
+                  style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                  alt={member.name}
+                />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.name}</div>
+                <button
+                  onClick={logout}
+                  style={{ fontSize: "0.68rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  logout
+                </button>
+              </div>
             </div>
+          ) : (
+            <a
+              href={`${authBase}/auth/anilist`}
+              className="btn btn-primary btn-sm"
+              style={{ width: "100%", textAlign: "center", marginBottom: 12 }}
+            >
+              Login with AniList
+            </a>
+          )}
+
+          <div style={{
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            paddingTop: 10,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "4px 10px",
+          }}>
+            {[
+              { href: "/cookies.html", label: "Cookies" },
+              { href: "/privacy.html", label: "Privacy" },
+              { href: "/terms.html", label: "Terms" },
+            ].map(({ href, label }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: "0.68rem", color: "var(--text2)", textDecoration: "none", opacity: 0.6 }}
+              >
+                {label}
+              </a>
+            ))}
+            <span style={{ fontSize: "0.68rem", color: "var(--text2)", opacity: 0.4, marginLeft: "auto" }}>2026</span>
           </div>
-        ) : (
-          <a
-            href={`${authBase}/auth/anilist`}
-            className="btn btn-primary btn-sm"
-            style={{ width: "100%", textAlign: "center" }}
-          >
-            Login with AniList
-          </a>
-        )}
-        <a
-          href="/cookies.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            marginTop: 6,
-            display: "block",
-            fontSize: "0.75rem",
-            color: "var(--text2)",
-            textDecoration: "none"
-          }}
-        >
-          Cookie Policy
-        </a>
-        <a
-          href="/privacy.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            marginTop: 6,
-            display: "block",
-            fontSize: "0.75rem",
-            color: "var(--text2)",
-            textDecoration: "none"
-          }}
-        >
-          Privacy Policy
-        </a>
-        <a
-          href="/terms.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            marginTop: 6,
-            display: "block",
-            fontSize: "0.75rem",
-            color: "var(--text2)",
-            textDecoration: "none"
-          }}
-        >
-          Terms of Service
-        </a>
-        <span className="version" style={{ marginTop: 8, display: "block" }}>2026</span>
-      </div>
+        </div>
     </nav>
   );
 }

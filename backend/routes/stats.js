@@ -44,7 +44,111 @@ router.get('/overview', (req, res) => {
     WHERE s.group_id = ? AND a.rating IS NOT NULL
   `).get(req.groupId).c;
 
-  res.json({ totalAnime, rated, avgRating, seasons, members, dropped });
+  const bestTaste = db.prepare(`
+    SELECT m.name, m.id, AVG(a.rating) AS avg_pick_rating, COUNT(*) AS pick_count
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    JOIN members m ON a.assigner_id = m.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+    GROUP BY a.assigner_id
+    HAVING pick_count >= 3
+    ORDER BY avg_pick_rating DESC LIMIT 1
+  `).get(req.groupId);
+
+  const hardestToPlease = db.prepare(`
+    SELECT m.name, m.id, AVG(a.rating) AS avg_given, COUNT(*) AS rated_count
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    JOIN members m ON a.assignee_id = m.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+    GROUP BY a.assignee_id
+    HAVING rated_count >= 3
+    ORDER BY avg_given ASC LIMIT 1
+  `).get(req.groupId);
+
+  const alignmentPairs = db.prepare(`
+    SELECT a1.assigner_id, a1.assignee_id,
+      AVG(a1.rating) AS avg1,
+      m1.name AS assigner_name, m2.name AS assignee_name
+    FROM assignments a1
+    JOIN rolls r ON a1.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    JOIN members m1 ON a1.assigner_id = m1.id
+    JOIN members m2 ON a1.assignee_id = m2.id
+    WHERE s.group_id = ? AND a1.rating IS NOT NULL
+    GROUP BY a1.assigner_id, a1.assignee_id
+    HAVING COUNT(*) >= 2
+  `).all(req.groupId);
+
+  let bestAlignment = null;
+  let smallestDiff = Infinity;
+  for (const p1 of alignmentPairs) {
+    const p2 = alignmentPairs.find(p =>
+      p.assigner_id === p1.assignee_id && p.assignee_id === p1.assigner_id
+    );
+    if (p2) {
+      const diff = Math.abs(p1.avg1 - p2.avg1);
+      if (diff < smallestDiff) {
+        smallestDiff = diff;
+        bestAlignment = { names: [p1.assigner_name, p1.assignee_name], diff: diff.toFixed(2) };
+      }
+    }
+  }
+
+// Longest streak — consecutive completed rolls going backwards from most recent
+  const allCompletedRolls = db.prepare(`
+    SELECT r.id AS roll_id, r.roll_number, s.id AS season_id
+    FROM rolls r
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ? AND r.state = 'completed'
+    ORDER BY r.id DESC
+  `).all(req.groupId);
+
+  const memberRollIds = db.prepare(`
+    SELECT DISTINCT a.assignee_id, a.roll_id
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE s.group_id = ?
+  `).all(req.groupId);
+
+  const memberRollSets = {};
+  for (const row of memberRollIds) {
+    if (!memberRollSets[row.assignee_id]) memberRollSets[row.assignee_id] = new Set();
+    memberRollSets[row.assignee_id].add(row.roll_id);
+  }
+
+  const allRollIds = allCompletedRolls.map(r => r.roll_id);
+
+  let longestStreakCount = 0;
+  const streakLeaders = [];
+
+  for (const [memberId, rollSet] of Object.entries(memberRollSets)) {
+    let streak = 0;
+    for (const rollId of allRollIds) {
+      if (rollSet.has(rollId)) streak++;
+      else break;
+    }
+    if (streak > longestStreakCount) {
+      longestStreakCount = streak;
+      streakLeaders.length = 0;
+      streakLeaders.push(memberId);
+    } else if (streak === longestStreakCount && streak > 0) {
+      streakLeaders.push(memberId);
+    }
+  }
+
+  const streakNames = streakLeaders.map(id => {
+    return db.prepare('SELECT name FROM members WHERE id = ?').get(id)?.name;
+  }).filter(Boolean);
+
+  const longestStreak = longestStreakCount > 0
+    ? { names: streakNames, seasons: longestStreakCount }
+    : null;
+
+  res.json({ totalAnime, rated, avgRating, seasons, members, dropped, bestTaste, hardestToPlease, bestAlignment, longestStreak });
 });
 
 // GET /api/stats/members
@@ -55,13 +159,15 @@ router.get('/members', (req, res) => {
 
   const stats = members.map(m => {
     const received = db.prepare(`
-      SELECT COUNT(*) AS total, AVG(a.rating) AS avg_rating,
-        AVG(CASE WHEN a.status = 'completed' THEN 1.0 ELSE 0 END) AS completion_rate,
-        MIN(a.rating) AS min_rating, MAX(a.rating) AS max_rating
+      SELECT COUNT(*) AS total,
+        AVG(a.rating) AS avg_rating,
+        AVG(CASE WHEN a.status = 'completed' THEN 1.0 ELSE 0.0 END) AS completion_rate,
+        MIN(a.rating) AS min_rating,
+        MAX(a.rating) AS max_rating
       FROM assignments a
       JOIN rolls r ON a.roll_id = r.id
       JOIN seasons s ON r.season_id = s.id
-      WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
+      WHERE a.assignee_id = ? AND s.group_id = ?
     `).get(m.id, req.groupId);
 
     const given = db.prepare(`
@@ -92,17 +198,21 @@ router.get('/members', (req, res) => {
       .map(([genre, count]) => ({ genre, count }));
 
     const best = db.prepare(`
-      SELECT a.anime_title, a.rating FROM assignments a
+      SELECT a.anime_title, a.rating, m2.name AS assigner_name
+      FROM assignments a
       JOIN rolls r ON a.roll_id = r.id
       JOIN seasons s ON r.season_id = s.id
+      JOIN members m2 ON a.assigner_id = m2.id
       WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
       ORDER BY a.rating DESC LIMIT 1
     `).get(m.id, req.groupId);
 
     const worst = db.prepare(`
-      SELECT a.anime_title, a.rating FROM assignments a
+      SELECT a.anime_title, a.rating, m2.name AS assigner_name
+      FROM assignments a
       JOIN rolls r ON a.roll_id = r.id
       JOIN seasons s ON r.season_id = s.id
+      JOIN members m2 ON a.assigner_id = m2.id
       WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND s.group_id = ?
       ORDER BY a.rating ASC LIMIT 1
     `).get(m.id, req.groupId);
@@ -113,6 +223,19 @@ router.get('/members', (req, res) => {
       JOIN seasons s ON r.season_id = s.id
       WHERE a.assignee_id = ? AND a.rating IS NOT NULL AND a.anilist_data IS NOT NULL AND s.group_id = ?
     `).all(m.id, req.groupId);
+
+    const ratingsOverTime = db.prepare(`
+      SELECT s.id AS season_id, s.name AS season_name,
+        AVG(CASE WHEN a.assignee_id = ? THEN a.rating END) AS avg_received,
+        AVG(CASE WHEN a.assigner_id = ? THEN a.rating END) AS avg_given
+      FROM assignments a
+      JOIN rolls r ON a.roll_id = r.id
+      JOIN seasons s ON r.season_id = s.id
+      WHERE s.group_id = ? AND a.rating IS NOT NULL
+        AND (a.assignee_id = ? OR a.assigner_id = ?)
+      GROUP BY s.id
+      ORDER BY s.id ASC
+    `).all(m.id, m.id, req.groupId, m.id, m.id);
 
     const offsets = tasteRows.map(r => {
       try {
@@ -137,6 +260,7 @@ router.get('/members', (req, res) => {
       top_genres,
       best_received: best,
       worst_received: worst,
+      ratings_over_time: ratingsOverTime,
       taste_offset_vs_anilist: tasteOffset,
     };
   });
@@ -208,6 +332,36 @@ router.get('/head-to-head', (req, res) => {
     GROUP BY a.assigner_id, a.assignee_id
   `).all(req.groupId);
   res.json(rows);
+});
+
+// GET /api/stats/ratings-over-time/:memberId
+router.get('/ratings-over-time/:memberId', (req, res) => {
+  const received = db.prepare(`
+    SELECT r.id AS roll_id, r.roll_number, s.id AS season_id, s.name AS season_name,
+      a.rating, a.anime_title
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    WHERE a.assignee_id = ? AND s.group_id = ? AND a.rating IS NOT NULL
+    ORDER BY s.id ASC, r.roll_number ASC
+  `).all(req.params.memberId, req.groupId);
+
+  const given = db.prepare(`
+    SELECT r.id AS roll_id, r.roll_number, s.id AS season_id, s.name AS season_name,
+      a.rating, a.anime_title, ass.name AS assignee_name
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN seasons s ON r.season_id = s.id
+    JOIN members ass ON a.assignee_id = ass.id
+    WHERE a.assigner_id = ? AND s.group_id = ? AND a.rating IS NOT NULL
+    ORDER BY s.id ASC, r.roll_number ASC
+  `).all(req.params.memberId, req.groupId);
+
+  const seasons = db.prepare(
+    'SELECT DISTINCT id, name FROM seasons WHERE group_id = ? ORDER BY id ASC'
+  ).all(req.groupId);
+
+  res.json({ received, given, seasons });
 });
 
 export default router;
