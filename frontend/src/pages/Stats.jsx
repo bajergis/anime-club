@@ -664,35 +664,82 @@ export default function Stats() {
                 </div>
               </div>
 
-              {/* Member breakdown table */}
-              {s.member_breakdown?.length > 0 && (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Member</th>
-                      <th>Shows</th>
-                      <th>Avg Rating</th>
-                      <th>Completed</th>
-                      <th>Dropped</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.member_breakdown.map(mb => (
-                      <tr key={mb.id}>
-                        <td style={{ fontWeight: 500 }}>{mb.name}</td>
-                        <td style={{ fontFamily: "var(--font-mono)" }}>{mb.total ?? 0}</td>
-                        <td style={{ fontFamily: "var(--font-mono)" }}>
-                          {mb.avg_rating != null ? mb.avg_rating.toFixed(2) : "—"}
-                        </td>
-                        <td style={{ color: "var(--green)", fontFamily: "var(--font-mono)" }}>{mb.completed ?? 0}</td>
-                        <td style={{ color: "var(--red)", fontFamily: "var(--font-mono)" }}>{mb.dropped ?? 0}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+                  gap: 16,
+                  alignItems: "start",
+                }}
+              >
+                {/* Member breakdown */}
+                {s.member_breakdown?.length > 0 && (
+                  <div>
+                    <div
+                      className="text-muted mb-6"
+                      style={{
+                        fontSize: "0.7rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Member Breakdown
+                    </div>
 
-              <SeasonPairMatrix pairs={s.assignment_pairs} members={members} />
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Member</th>
+                            <th>Shows</th>
+                            <th>Avg Rating</th>
+                            <th>Completed</th>
+                            <th>Dropped</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {s.member_breakdown.map(mb => (
+                            <tr key={mb.id}>
+                              <td style={{ fontWeight: 500 }}>{mb.name}</td>
+                              <td style={{ fontFamily: "var(--font-mono)" }}>
+                                {mb.total ?? 0}
+                              </td>
+                              <td style={{ fontFamily: "var(--font-mono)" }}>
+                                {mb.avg_rating != null
+                                  ? mb.avg_rating.toFixed(2)
+                                  : "—"}
+                              </td>
+                              <td
+                                style={{
+                                  color: "var(--green)",
+                                  fontFamily: "var(--font-mono)",
+                                }}
+                              >
+                                {mb.completed ?? 0}
+                              </td>
+                              <td
+                                style={{
+                                  color: "var(--red)",
+                                  fontFamily: "var(--font-mono)",
+                                }}
+                              >
+                                {mb.dropped ?? 0}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Assignment pair matrix */}
+                <SeasonPairMatrix
+                  pairs={s.assignment_pairs}
+                  members={members}
+                />
+              </div>
 
               {/* Top genres */}
               {s.top_genres?.length > 0 && (
