@@ -298,6 +298,8 @@ router.get('/:id', (req, res) => {
     GROUP BY g.id
   `).get(req.params.id);
 
+  console.log('[groups/:id] result:', group);
+
   if (!group) return res.status(404).json({ error: 'Group not found' });
   res.json(group);
 });
