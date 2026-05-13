@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Season from "./pages/Season";
 import Seasons from "./pages/Seasons";
@@ -9,11 +9,14 @@ import Admin from "./pages/Admin";
 import "./App.css";
 import { useAuth } from "./lib/AuthContext";
 import logo from "./assets/icon.png";
+import { useState } from "react";
 
 function Nav() {
-  const { member, logout, authBase } = useAuth();  // single call, correct destructure
+  const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
+  const location = useLocation();
 
   if (member === undefined) return null; // still loading
+  if (!member || authState === 'no_group') return null;
 
   const links = [
     { to: "/", label: "Dashboard", icon: "⊞" },
@@ -111,9 +114,10 @@ function Nav() {
 // Wraps any route that requires a logged-in session.
 // Redirects to /login if no session, shows nothing while loading.
 function ProtectedRoute({ children }) {
-  const { member } = useAuth();
+  const { member, authState } = useAuth();
   if (member === undefined) return null; // still loading, avoid flash
   if (!member) return <Navigate to="/login" replace />;
+  if (authState === 'no_group') return <Navigate to="/no-group" replace />;
   return children;
 }
 
@@ -126,7 +130,7 @@ export default function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/not-invited" element={<NotInvitedPage />} />
+            <Route path="/no-group" element={<NoGroupPage />} />
 
             {/* Protected */}
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -144,8 +148,9 @@ export default function App() {
 }
 
 function LoginPage() {
-  const { member, authBase } = useAuth();
-  if (member) return <Navigate to="/" replace />;
+  const { member, authState, authBase } = useAuth();
+  if (member && authState === 'member') return <Navigate to="/" replace />;
+  if (member && authState === 'no_group') return <Navigate to="/no-group" replace />;
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -330,11 +335,334 @@ function LoginPage() {
   );
 }
 
-function NotInvitedPage() {
+function NoGroupPage() {
+  const { member, logout, authBase } = useAuth();
+  const [view, setView] = useState(null); // null | 'create' | 'search' | 'invite'
+
+  if (!member) return <Navigate to="/login" replace />;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16 }}>
-      <h1>Not Invited</h1>
-      <p className="text-muted">Your AniList account isn't part of this club yet.</p>
+    <div className="no-group-page" style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", height: "100%", padding: 24,
+    }}>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 16 }}>
+          {member.avatar_url && (
+            <img src={member.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+          )}
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>{member.anilistUsername}</div>
+            <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>logged in via AniList</div>
+          </div>
+        </div>
+        <h1 style={{ marginBottom: 8 }}>You're not in a group yet</h1>
+        <div className="text-muted" style={{ fontSize: "0.85rem", maxWidth: 380, lineHeight: 1.6 }}>
+          AniRoll is built around groups. Create one for your friends, or join one you've been invited to.
+        </div>
+      </div>
+
+      {/* Action cards */}
+      {!view && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, width: "100%", maxWidth: 560 }}>
+          <button
+            onClick={() => setView('create')}
+            style={{
+              background: "rgba(140,120,255,0.08)", border: "1px solid rgba(140,120,255,0.25)",
+              borderRadius: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center",
+              color: "var(--text)", transition: "background 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(140,120,255,0.15)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(140,120,255,0.08)"}
+          >
+            <div style={{ fontSize: 24, marginBottom: 10 }}>⊕</div>
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: "0.9rem" }}>Create a Group</div>
+            <div className="text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              Start a new club and invite your friends
+            </div>
+          </button>
+
+          <button
+            onClick={() => setView('invite')}
+            style={{
+              background: "rgba(126,200,176,0.08)", border: "1px solid rgba(126,200,176,0.25)",
+              borderRadius: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center",
+              color: "var(--text)", transition: "background 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(126,200,176,0.15)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(126,200,176,0.08)"}
+          >
+            <div style={{ fontSize: 24, marginBottom: 10 }}>⊞</div>
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: "0.9rem" }}>Have an Invite?</div>
+            <div className="text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              Enter your invite code to join a group
+            </div>
+          </button>
+
+          <button
+            onClick={() => setView('search')}
+            style={{
+              background: "rgba(240,192,64,0.08)", border: "1px solid rgba(240,192,64,0.25)",
+              borderRadius: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center",
+              color: "var(--text)", transition: "background 0.15s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(240,192,64,0.15)"}
+            onMouseLeave={e => e.currentTarget.style.background = "rgba(240,192,64,0.08)"}
+          >
+            <div style={{ fontSize: 24, marginBottom: 10 }}>◎</div>
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: "0.9rem" }}>Find a Group</div>
+            <div className="text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              Search for a group and request to join
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Create group form */}
+      {view === 'create' && (
+        <CreateGroupForm onBack={() => setView(null)} authBase={authBase} member={member} />
+      )}
+
+      {/* Invite code form */}
+      {view === 'invite' && (
+        <InviteCodeForm onBack={() => setView(null)} authBase={authBase} />
+      )}
+
+      {/* Search form */}
+      {view === 'search' && (
+        <GroupSearchForm onBack={() => setView(null)} authBase={authBase} />
+      )}
+
+      {/* Logout */}
+      <button
+        onClick={logout}
+        style={{ marginTop: 32, fontSize: "0.75rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer" }}
+      >
+        logout
+      </button>
+    </div>
+  );
+}
+
+function CreateGroupForm({ onBack, authBase, member }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError(null);
+    const res = await fetch(`${authBase}/api/groups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+      credentials: "include",
+    }).then(r => r.json());
+    setSaving(false);
+    if (res.error) return setError(res.error);
+    // Reload to re-fetch /auth/me with new group context
+    window.location.href = "/";
+  }
+
+  return (
+    <div className="no-group-page" style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", height: "100%", padding: 24,
+    }}>
+      <button onClick={onBack} className="btn btn-ghost btn-sm" style={{ marginBottom: 20 }}>← Back</button>
+      <div className="card">
+        <h2 className="mb-8">Create a Group</h2>
+        <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
+          You'll be the owner. You can invite members after creating the group.
+        </div>
+        <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+          Group Name
+        </label>
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && submit()}
+          placeholder="e.g. The Anime Bois"
+          style={{ marginBottom: 12 }}
+          autoFocus
+        />
+        {error && <div style={{ color: "var(--red)", fontSize: "0.8rem", marginBottom: 12 }}>{error}</div>}
+        <button className="btn btn-primary" onClick={submit} disabled={saving || !name.trim()} style={{ width: "100%" }}>
+          {saving ? "Creating..." : "Create Group"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InviteCodeForm({ onBack, authBase }) {
+  const [token, setToken] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [groupInfo, setGroupInfo] = useState(null);
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function checkToken() {
+    if (!token.trim()) return;
+    setChecking(true);
+    setError(null);
+    const res = await fetch(`${authBase}/api/groups/join?token=${encodeURIComponent(token.trim())}`, {
+      credentials: "include",
+    }).then(r => r.json());
+    setChecking(false);
+    if (res.error) return setError(res.error);
+    setGroupInfo(res);
+  }
+
+  async function join() {
+    setJoining(true);
+    const res = await fetch(`${authBase}/api/groups/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.trim() }),
+      credentials: "include",
+    }).then(r => r.json());
+    setJoining(false);
+    if (res.error) return setError(res.error);
+    window.location.href = "/";
+  }
+
+  return (
+    <div style={{ width: "100%", maxWidth: 400 }}>
+      <button onClick={onBack} className="btn btn-ghost btn-sm" style={{ marginBottom: 20 }}>← Back</button>
+      <div className="card">
+        <h2 className="mb-8">Enter Invite Code</h2>
+        <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
+          Paste the invite code or link a group owner sent you.
+        </div>
+        <label className="text-muted" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>
+          Invite Code
+        </label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input
+            value={token}
+            onChange={e => {
+              // Accept full URLs too — extract token param
+              const val = e.target.value;
+              try {
+                const url = new URL(val);
+                const t = url.searchParams.get("token");
+                if (t) { setToken(t); return; }
+              } catch {}
+              setToken(val);
+            }}
+            placeholder="Paste code or invite link..."
+            style={{ flex: 1 }}
+            autoFocus
+          />
+          <button className="btn btn-ghost btn-sm" onClick={checkToken} disabled={checking || !token.trim()}>
+            {checking ? "..." : "Check"}
+          </button>
+        </div>
+        {error && <div style={{ color: "var(--red)", fontSize: "0.8rem", marginBottom: 12 }}>{error}</div>}
+        {groupInfo && (
+          <div style={{
+            padding: "12px 16px", background: "rgba(126,200,176,0.08)",
+            border: "1px solid rgba(126,200,176,0.2)", borderRadius: 8, marginBottom: 12,
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{groupInfo.group_name}</div>
+            <div className="text-muted" style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
+              {groupInfo.member_count} members
+            </div>
+          </div>
+        )}
+        {groupInfo && (
+          <button className="btn btn-primary" onClick={join} disabled={joining} style={{ width: "100%" }}>
+            {joining ? "Joining..." : `Join ${groupInfo.group_name}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GroupSearchForm({ onBack, authBase }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [requested, setRequested] = useState({});
+  const [error, setError] = useState(null);
+
+  async function search() {
+    if (!query.trim()) return;
+    setSearching(true);
+    const res = await fetch(`${authBase}/api/groups/search?q=${encodeURIComponent(query.trim())}`, {
+      credentials: "include",
+    }).then(r => r.json());
+    setSearching(false);
+    if (res.error) return setError(res.error);
+    setResults(res);
+  }
+
+  async function requestJoin(groupId) {
+    const res = await fetch(`${authBase}/api/groups/${groupId}/request`, {
+      method: "POST",
+      credentials: "include",
+    }).then(r => r.json());
+    if (res.error) return setError(res.error);
+    setRequested(prev => ({ ...prev, [groupId]: true }));
+  }
+
+  return (
+    <div style={{ width: "100%", maxWidth: 480 }}>
+      <button onClick={onBack} className="btn btn-ghost btn-sm" style={{ marginBottom: 20 }}>← Back</button>
+      <div className="card">
+        <h2 className="mb-8">Find a Group</h2>
+        <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
+          Search by group name. The owner will need to approve your request.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && search()}
+            placeholder="Search groups..."
+            style={{ flex: 1 }}
+            autoFocus
+          />
+          <button className="btn btn-primary btn-sm" onClick={search} disabled={searching || !query.trim()}>
+            {searching ? "..." : "Search"}
+          </button>
+        </div>
+        {error && <div style={{ color: "var(--red)", fontSize: "0.8rem", marginBottom: 12 }}>{error}</div>}
+        {results.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {results.map(g => (
+              <div key={g.id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "10px 14px", background: "var(--bg3)",
+                border: "1px solid var(--border)", borderRadius: 8,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{g.name}</div>
+                  <div className="text-muted" style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)" }}>
+                    {g.member_count} members · {g.season_count} seasons
+                  </div>
+                </div>
+                <button
+                  className={requested[g.id] ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
+                  onClick={() => requestJoin(g.id)}
+                  disabled={requested[g.id]}
+                >
+                  {requested[g.id] ? "Requested ✓" : "Request to Join"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {results.length === 0 && query && !searching && (
+          <div className="text-muted" style={{ fontSize: "0.8rem", textAlign: "center", padding: 16 }}>
+            No groups found for "{query}"
+          </div>
+        )}
+      </div>
     </div>
   );
 }

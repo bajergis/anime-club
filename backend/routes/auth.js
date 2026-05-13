@@ -14,15 +14,29 @@ router.get("/anilist", (req, res) => {
 });
 
 router.get("/me", (req, res) => {
-  if (!req.session.memberId) return res.status(401).json({ error: "Not logged in" });
-  const member = db.prepare(`
-    SELECT m.id, m.name, m.anilist_username, m.avatar_url, m.group_id,
-           g.name AS group_name, g.owner_id
-    FROM members m
-    LEFT JOIN groups g ON g.id = m.group_id
-    WHERE m.id = ?
-  `).get(req.session.memberId);
-  res.json(member);
+  // Existing member with group
+  if (req.session.memberId) {
+    const member = db.prepare(`
+      SELECT m.id, m.name, m.anilist_username, m.avatar_url, m.group_id,
+             g.name AS group_name, g.owner_id
+      FROM members m
+      LEFT JOIN groups g ON g.id = m.group_id
+      WHERE m.id = ?
+    `).get(req.session.memberId);
+    return res.json({ ...member, state: 'member' });
+  }
+
+  // Logged in but no group yet
+  if (req.session.userId) {
+    return res.json({
+      state: 'no_group',
+      userId: req.session.userId,
+      anilistUsername: req.session.anilistUsername,
+      avatar_url: req.session.avatarUrl,
+    });
+  }
+
+  return res.status(401).json({ error: 'Not logged in' });
 });
 
 router.post("/logout", (req, res) => {
@@ -36,13 +50,16 @@ router.get("/callback", async (req, res) => {
     ip: req.ip,
     headers: req.headers,
   });
+
   const { code } = req.query;
   if (!code) return res.status(400).json({ error: "No code provided" });
+
   console.log("Token exchange:", {
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET ? `${CLIENT_SECRET.slice(0, 4)}...` : "MISSING",
     redirect_uri: REDIRECT_URI,
   });
+
   const tokenRes = await fetch("https://anilist.co/api/v2/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -74,20 +91,7 @@ router.get("/callback", async (req, res) => {
   const viewer = profileRes.data?.Viewer;
   if (!viewer) return res.status(500).json({ error: "Could not fetch AniList profile" });
 
-  const member = db.prepare("SELECT * FROM members WHERE anilist_username = ?").get(viewer.name);
-
-  // ── CLOSED REGISTRATION ──────────────────────────────────────────────────
-  // If this AniList user has no matching member row, they're not in any group.
-  // We don't auto-create accounts — redirect to a "not invited" page instead.
-  if (!member) {
-    console.log(`Login attempt by unknown AniList user: ${viewer.name} (${viewer.id})`);
-    return res.redirect(`${process.env.FRONTEND_URL}/not-invited`);
-  }
-
-  db.prepare(`
-    UPDATE members SET anilist_token = ?, anilist_id = ?, avatar_url = ? WHERE id = ?
-  `).run(tokenRes.access_token, viewer.id, viewer.avatar?.large, member.id);
-
+  // Upsert users table regardless of membership status
   db.prepare(`
     INSERT INTO users (id, anilist_id, anilist_token, username, avatar_url)
     VALUES (?, ?, ?, ?, ?)
@@ -102,9 +106,34 @@ router.get("/callback", async (req, res) => {
     viewer.avatar?.large,
   );
 
+  const member = db.prepare(
+    "SELECT * FROM members WHERE anilist_username = ?"
+  ).get(viewer.name);
+
+  // New user — no group yet
+  if (!member) {
+    console.log(`New user, no group: ${viewer.name} (${viewer.id})`);
+    req.session.userId = `anilist:${viewer.id}`;
+    req.session.anilistUsername = viewer.name;
+    req.session.avatarUrl = viewer.avatar?.large;
+    return req.session.save(err => {
+      if (err) {
+        console.error("Session save failed:", err);
+        return res.status(500).json({ error: "Session save failed" });
+      }
+      res.redirect(`${process.env.FRONTEND_URL}/no-group`);
+    });
+  }
+
+  // Existing member — update token and avatar
+  db.prepare(`
+    UPDATE members SET anilist_token = ?, anilist_id = ?, avatar_url = ? WHERE id = ?
+  `).run(tokenRes.access_token, viewer.id, viewer.avatar?.large, member.id);
+
   req.session.memberId  = member.id;
   req.session.memberName = member.name;
-  req.session.groupId   = member.group_id;  // null if not in a group yet
+  req.session.groupId   = member.group_id;
+  req.session.userId    = `anilist:${viewer.id}`;
 
   req.session.save(err => {
     if (err) {

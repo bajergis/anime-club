@@ -19,6 +19,7 @@ import rollsRouter from './routes/rolls.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import groupsRouter from './routes/groups.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQLiteStore = connectSqlite3(session);
@@ -69,6 +70,7 @@ app.use(session({
 
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/anime', animeRouter);
+app.use('/api/groups', groupsRouter);
 app.use('/api/members', membersRouter);
 app.use('/api/rolls', rollsRouter);
 app.use('/api/seasons', seasonsRouter);
