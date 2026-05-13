@@ -771,7 +771,7 @@ function JoinPage() {
                   Sign in with AniList to accept this invite.
                 </div>
 
-                  href={`${authBase}/auth/anilist`}
+                  <a href={`${authBase}/auth/anilist`}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     gap: 8, background: "rgba(140,120,255,0.15)",
