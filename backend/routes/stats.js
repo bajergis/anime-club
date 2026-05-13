@@ -117,7 +117,7 @@ router.get('/overview', (req, res) => {
     FROM assignments a
     JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
-    WHERE s.group_id = ?
+    WHERE s.group_id = ? AND r.state = 'completed'
   `).all(req.groupId);
 
   const memberRollSets = {};
