@@ -10,6 +10,7 @@ import "./App.css";
 import { useAuth } from "./lib/AuthContext";
 import logo from "./assets/icon.png";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 function Nav() {
   const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
@@ -131,6 +132,7 @@ export default function App() {
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/no-group" element={<NoGroupPage />} />
+            <Route path="/join" element={<JoinPage />} />
 
             {/* Protected */}
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -339,6 +341,14 @@ function NoGroupPage() {
   const { member, logout, authBase } = useAuth();
   const [view, setView] = useState(null); // null | 'create' | 'search' | 'invite'
 
+  useEffect(() => {
+    // If user just came back from AniList login with a pending invite
+    const pendingToken = sessionStorage.getItem("pendingInviteToken");
+    if (pendingToken) {
+      setView('invite');
+    }
+  }, []);
+
   if (!member) return <Navigate to="/login" replace />;
 
   return (
@@ -498,7 +508,8 @@ function CreateGroupForm({ onBack, authBase, member }) {
 }
 
 function InviteCodeForm({ onBack, authBase }) {
-  const [token, setToken] = useState("");
+  const pendingToken = sessionStorage.getItem("pendingInviteToken") || "";
+  const [token, setToken] = useState(pendingToken);
   const [checking, setChecking] = useState(false);
   const [groupInfo, setGroupInfo] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -660,6 +671,148 @@ function GroupSearchForm({ onBack, authBase }) {
         {results.length === 0 && query && !searching && (
           <div className="text-muted" style={{ fontSize: "0.8rem", textAlign: "center", padding: 16 }}>
             No groups found for "{query}"
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function JoinPage() {
+  const { member, authState, authBase } = useAuth();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
+  const [groupInfo, setGroupInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState(false);
+
+  useEffect(() => {
+    if (!token) { setError("No invite token provided."); setLoading(false); return; }
+    // Store token in sessionStorage so we can use it after AniList login
+    sessionStorage.setItem("pendingInviteToken", token);
+    fetch(`${authBase}/api/groups/join?token=${encodeURIComponent(token)}`, {
+      credentials: "include",
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) setError(data.error);
+        else setGroupInfo(data);
+        setLoading(false);
+      })
+      .catch(() => { setError("Failed to load invite."); setLoading(false); });
+  }, [token]);
+
+  async function join() {
+    setJoining(true);
+    const res = await fetch(`${authBase}/api/groups/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      credentials: "include",
+    }).then(r => r.json());
+    setJoining(false);
+    if (res.error) return setError(res.error);
+    sessionStorage.removeItem("pendingInviteToken");
+    setJoined(true);
+    setTimeout(() => { window.location.href = "/"; }, 1500);
+  }
+
+  if (loading) return <div className="loading">Checking invite...</div>;
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", height: "100%", padding: 24,
+    }}>
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 12,
+            background: "rgba(140,120,255,0.15)",
+            border: "1px solid rgba(140,120,255,0.3)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 24, margin: "0 auto 16px",
+          }}>⊞</div>
+          <h1 style={{ marginBottom: 8 }}>You've been invited</h1>
+          <div className="text-muted" style={{ fontSize: "0.85rem" }}>
+            Someone shared an invite link with you.
+          </div>
+        </div>
+
+        {error ? (
+          <div className="card" style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: 12 }}>✕</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Invite Invalid</div>
+            <div className="text-muted" style={{ fontSize: "0.85rem", marginBottom: 16 }}>{error}</div>
+            <a href="/login" className="btn btn-ghost btn-sm">Back to login</a>
+          </div>
+        ) : joined ? (
+          <div className="card" style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: 12 }}>✓</div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Joined successfully!</div>
+            <div className="text-muted" style={{ fontSize: "0.85rem" }}>Redirecting you now...</div>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="text-muted mb-8" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              You've been invited to
+            </div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 4 }}>{groupInfo?.group_name}</div>
+            <div className="text-muted mb-24" style={{ fontSize: "0.8rem", fontFamily: "var(--font-mono)" }}>
+              {groupInfo?.member_count} members
+            </div>
+
+            {!member ? (
+              // Not logged in — send to AniList, token already in sessionStorage
+              <div>
+                <div className="text-muted mb-16" style={{ fontSize: "0.8rem", lineHeight: 1.6 }}>
+                  Sign in with AniList to accept this invite.
+                </div>
+
+                  href={`${authBase}/auth/anilist`}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    gap: 8, background: "rgba(140,120,255,0.15)",
+                    border: "1px solid rgba(140,120,255,0.35)", color: "#a89cf7",
+                    borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 600,
+                    textDecoration: "none", textAlign: "center",
+                  }}
+                >
+                  Login with AniList to Join
+                </a>
+              </div>
+            ) : authState === 'member' ? (
+              // Already in a group
+              <div>
+                <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
+                  You're already a member of a group. You can't join another one.
+                </div>
+                <a href="/" className="btn btn-ghost btn-sm">Go to dashboard</a>
+              </div>
+            ) : (
+              // Logged in, no group — show join button
+              <div>
+                <div className="flex items-center gap-8 mb-16" style={{
+                  padding: "10px 12px", background: "rgba(255,255,255,0.04)",
+                  borderRadius: "var(--radius)", border: "1px solid rgba(255,255,255,0.07)",
+                }}>
+                  {member.avatar_url && (
+                    <img src={member.avatar_url} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+                  )}
+                  <div style={{ fontSize: "0.82rem", fontWeight: 600 }}>{member.anilistUsername}</div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={join}
+                  disabled={joining}
+                  style={{ width: "100%" }}
+                >
+                  {joining ? "Joining..." : `Join ${groupInfo?.group_name}`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

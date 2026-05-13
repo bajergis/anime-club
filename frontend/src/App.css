@@ -290,3 +290,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   display: flex;
   flex-direction: column;
 }
+
+.main-content:has(.join-page) {
+  padding: 0;
+  max-width: 100%;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
