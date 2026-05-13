@@ -324,7 +324,23 @@ router.get('/season/:id', (req, res) => {
     .sort((a, b) => b[1] - a[1]).slice(0, 8)
     .map(([genre, count]) => ({ genre, count }));
 
-  res.json({ season, rollStats, memberBreakdown, top_genres });
+  const assignmentPairs = db.prepare(`
+    SELECT
+      a.assigner_id,
+      a.assignee_id,
+      m1.name AS assigner_name,
+      m2.name AS assignee_name,
+      COUNT(*) AS count
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    JOIN members m1 ON a.assigner_id = m1.id
+    JOIN members m2 ON a.assignee_id = m2.id
+    WHERE r.season_id = ?
+    GROUP BY a.assigner_id, a.assignee_id
+    ORDER BY count DESC, assigner_name ASC, assignee_name ASC
+  `).all(req.params.id);
+
+  res.json({ season, rollStats, memberBreakdown, top_genres, assignmentPairs });
 });
 
 // GET /api/stats/head-to-head

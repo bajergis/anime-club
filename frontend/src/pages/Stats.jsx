@@ -216,13 +216,108 @@ function HeadToHeadMatrix({ data, members }) {
   );
 }
 
+function SeasonPairMatrix({ pairs, members }) {
+  if (!pairs?.length || !members?.length) return null;
+
+  const activeMemberIds = new Set();
+
+  for (const p of pairs) {
+    activeMemberIds.add(p.assigner_id);
+    activeMemberIds.add(p.assignee_id);
+  }
+
+  const seasonMembers = members.filter(m => activeMemberIds.has(m.id));
+
+  if (!seasonMembers.length) return null;
+
+  const countMap = {};
+  for (const p of pairs) {
+    countMap[`${p.assigner_id}->${p.assignee_id}`] = p.count;
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div
+        className="text-muted mb-6"
+        style={{
+          fontSize: "0.7rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}
+      >
+        Assignment Pair Matrix
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Assigner ↓ / Assignee →</th>
+              {seasonMembers.map(m => (
+                <th key={m.id}>{m.name}</th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {seasonMembers.map(assigner => (
+              <tr key={assigner.id}>
+                <td style={{ fontWeight: 500 }}>{assigner.name}</td>
+
+                {seasonMembers.map(assignee => {
+                  if (assigner.id === assignee.id) {
+                    return (
+                      <td
+                        key={assignee.id}
+                        style={{
+                          textAlign: "center",
+                          color: "var(--border)",
+                          background: "var(--bg3)",
+                        }}
+                      >
+                        —
+                      </td>
+                    );
+                  }
+
+                  const count = countMap[`${assigner.id}->${assignee.id}`] ?? 0;
+
+                  return (
+                    <td
+                      key={assignee.id}
+                      style={{
+                        textAlign: "center",
+                        fontFamily: "var(--font-mono)",
+                        color: count > 0 ? "var(--accent)" : "var(--text2)",
+                      }}
+                    >
+                      {count > 0 ? count : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function SeasonAvgChart({ seasons }) {
   if (!seasons?.length) return null;
-  const data = seasons.map(s => ({
-    name: s.name,
-    avg: s.avg_rating != null ? +s.avg_rating.toFixed(2) : null,
-    rolls: s.rolls_completed ?? 0,
-  })).filter(d => d.avg != null);
+  const data = [...seasons]
+    .sort((a, b) => {
+      const aDate = a.started_at ? new Date(a.started_at) : new Date(0);
+      const bDate = b.started_at ? new Date(b.started_at) : new Date(0);
+      return aDate - bDate;
+    })
+    .map(s => ({
+      name: s.name,
+      avg: s.avg_rating != null ? +s.avg_rating.toFixed(2) : null,
+      rolls: s.rolls_completed ?? 0,
+  }))
+  .filter(d => d.avg != null);
 
   if (!data.length) return <div className="text-muted" style={{ fontSize: "0.8rem" }}>No rated data yet.</div>;
 
@@ -295,6 +390,7 @@ export default function Stats() {
                 roll_stats: data.rollStats,
                 member_breakdown: data.memberBreakdown,
                 top_genres: data.top_genres,
+                assignment_pairs: data.assignmentPairs,
               };
             })
             .catch(() => ({ ...s }))
@@ -595,6 +691,8 @@ export default function Stats() {
                   </tbody>
                 </table>
               )}
+
+              <SeasonPairMatrix pairs={s.assignment_pairs} members={members} />
 
               {/* Top genres */}
               {s.top_genres?.length > 0 && (
