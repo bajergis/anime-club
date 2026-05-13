@@ -360,7 +360,7 @@ export default function Stats() {
         <InsightCard
           label="Best Taste Alignment"
           value={overview?.bestAlignment ? overview.bestAlignment.names.join(" & ") : "—"}
-          sub={overview?.bestAlignment ? `diff ${overview.bestAlignment.diff} avg pts` : null}
+          sub={overview?.bestAlignment ? `mutual avg ${overview.bestAlignment.mutual_avg}/10` : null}
           color="var(--accent2)"
         />
         <InsightCard

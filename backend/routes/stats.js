@@ -69,31 +69,37 @@ router.get('/overview', (req, res) => {
   `).get(req.groupId);
 
   const alignmentPairs = db.prepare(`
-    SELECT a1.assigner_id, a1.assignee_id,
-      AVG(a1.rating) AS avg1,
+    SELECT a.assigner_id, a.assignee_id,
+      AVG(a.rating) AS avg_rating,
+      COUNT(*) AS pair_count,
       m1.name AS assigner_name, m2.name AS assignee_name
-    FROM assignments a1
-    JOIN rolls r ON a1.roll_id = r.id
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
-    JOIN members m1 ON a1.assigner_id = m1.id
-    JOIN members m2 ON a1.assignee_id = m2.id
-    WHERE s.group_id = ? AND a1.rating IS NOT NULL
-    GROUP BY a1.assigner_id, a1.assignee_id
-    HAVING COUNT(*) >= 2
+    JOIN members m1 ON a.assigner_id = m1.id
+    JOIN members m2 ON a.assignee_id = m2.id
+    WHERE s.group_id = ? AND a.rating IS NOT NULL
+    GROUP BY a.assigner_id, a.assignee_id
+    HAVING pair_count >= 2
   `).all(req.groupId);
 
   let bestAlignment = null;
-  let smallestDiff = Infinity;
+  let highestMutualAvg = -Infinity;
+
   for (const p1 of alignmentPairs) {
     const p2 = alignmentPairs.find(p =>
       p.assigner_id === p1.assignee_id && p.assignee_id === p1.assigner_id
     );
-    if (p2) {
-      const diff = Math.abs(p1.avg1 - p2.avg1);
-      if (diff < smallestDiff) {
-        smallestDiff = diff;
-        bestAlignment = { names: [p1.assigner_name, p1.assignee_name], diff: diff.toFixed(2) };
-      }
+    if (!p2) continue;
+
+    const mutualAvg = (p1.avg_rating + p2.avg_rating) / 2;
+
+    if (mutualAvg > highestMutualAvg) {
+      highestMutualAvg = mutualAvg;
+      bestAlignment = {
+        names: [p1.assigner_name, p1.assignee_name],
+        mutual_avg: mutualAvg.toFixed(2),
+      };
     }
   }
 
