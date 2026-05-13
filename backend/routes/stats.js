@@ -165,7 +165,9 @@ router.get('/members', (req, res) => {
 
   const stats = members.map(m => {
     const received = db.prepare(`
-      SELECT COUNT(*) AS total,
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
         AVG(a.rating) AS avg_rating,
         AVG(CASE WHEN a.status = 'completed' THEN 1.0 ELSE 0.0 END) AS completion_rate,
         MIN(a.rating) AS min_rating,
@@ -256,7 +258,7 @@ router.get('/members', (req, res) => {
 
     return {
       ...m,
-      received_count: received.total,
+      received_count: received.completed_count,
       avg_rating_given: received.avg_rating,
       completion_rate: received.completion_rate,
       min_rating: received.min_rating,
