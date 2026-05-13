@@ -9,7 +9,7 @@ import Admin from "./pages/Admin";
 import "./App.css";
 import { useAuth } from "./lib/AuthContext";
 import logo from "./assets/icon.png";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
 function Nav() {
