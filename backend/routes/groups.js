@@ -5,9 +5,12 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// ── Public routes (no auth required) ─────────────────────────
+router.use((req, res, next) => {
+  console.log(`[groups] ${req.method} ${req.path}`);
+  next();
+});
 
-// GET /api/groups/search?q=
+// ── GET /api/groups/search?q= ─────────────────────────────────
 router.get('/search', (req, res) => {
   const { q } = req.query;
   if (!q?.trim()) return res.json([]);
@@ -28,7 +31,7 @@ router.get('/search', (req, res) => {
   res.json(results);
 });
 
-// GET /api/groups/join?token=  — validate invite token, return group info
+// ── GET /api/groups/join?token= ───────────────────────────────
 router.get('/join', (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).json({ error: 'No token provided' });
@@ -45,7 +48,7 @@ router.get('/join', (req, res) => {
 
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
   if (invite.used_at) return res.status(410).json({ error: 'Invite has already been used' });
-  if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite has expired' });
+  if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite expired' });
 
   res.json({
     group_id: invite.group_id,
@@ -54,26 +57,7 @@ router.get('/join', (req, res) => {
   });
 });
 
-// GET /api/groups/:id — public group profile
-router.get('/:id', (req, res) => {
-  const group = db.prepare(`
-    SELECT g.id, g.name,
-      COUNT(DISTINCT gm.user_id) AS member_count,
-      COUNT(DISTINCT s.id) AS season_count
-    FROM groups g
-    LEFT JOIN group_members gm ON gm.group_id = g.id
-    LEFT JOIN seasons s ON s.group_id = g.id
-    WHERE g.id = ?
-    GROUP BY g.id
-  `).get(req.params.id);
-
-  if (!group) return res.status(404).json({ error: 'Group not found' });
-  res.json(group);
-});
-
-// ── Authenticated routes ──────────────────────────────────────
-
-// POST /api/groups — create a group, become owner and first member
+// ── POST /api/groups — create a group ────────────────────────
 router.post('/', requireAuth, (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Group name is required' });
@@ -81,26 +65,21 @@ router.post('/', requireAuth, (req, res) => {
   const userId = req.session.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
-  // Check user isn't already in a group
   const existing = db.prepare(
     'SELECT 1 FROM group_members WHERE user_id = ?'
   ).get(userId);
   if (existing) return res.status(409).json({ error: 'You are already in a group' });
 
   const createGroup = db.transaction(() => {
-    // Create the group
     const groupResult = db.prepare(
       'INSERT INTO groups (name, owner_id, created_at) VALUES (?, ?, datetime("now"))'
     ).run(name.trim(), userId);
     const groupId = groupResult.lastInsertRowid;
 
-    // Add owner to group_members
     db.prepare(
       'INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime("now"))'
     ).run(groupId, userId);
 
-    // Create a members row for the owner
-    // Use anilist username as the member id
     const username = req.session.anilistUsername;
     const avatarUrl = req.session.avatarUrl;
 
@@ -114,7 +93,6 @@ router.post('/', requireAuth, (req, res) => {
 
   const { groupId, username } = createGroup();
 
-  // Update session to reflect new group membership
   req.session.memberId = username;
   req.session.memberName = username;
   req.session.groupId = groupId;
@@ -125,7 +103,7 @@ router.post('/', requireAuth, (req, res) => {
   });
 });
 
-// POST /api/groups/join — consume invite token and join group
+// ── POST /api/groups/join — consume invite token ──────────────
 router.post('/join', requireAuth, (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'No token provided' });
@@ -133,9 +111,9 @@ router.post('/join', requireAuth, (req, res) => {
   const userId = req.session.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
-  const invite = db.prepare(`
-    SELECT * FROM group_invites WHERE token = ?
-  `).get(token);
+  const invite = db.prepare(
+    'SELECT * FROM group_invites WHERE token = ?'
+  ).get(token);
 
   if (!invite) return res.status(404).json({ error: 'Invite not found' });
   if (invite.used_at) return res.status(410).json({ error: 'Invite already used' });
@@ -178,7 +156,7 @@ router.post('/join', requireAuth, (req, res) => {
   });
 });
 
-// POST /api/groups/:id/request — request to join a public group
+// ── POST /api/groups/:id/request ──────────────────────────────
 router.post('/:id/request', requireAuth, (req, res) => {
   const userId = req.session.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
@@ -204,7 +182,7 @@ router.post('/:id/request', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/groups/:id/requests — owner sees pending join requests
+// ── GET /api/groups/:id/requests ──────────────────────────────
 router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
@@ -219,9 +197,9 @@ router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
   res.json(requests);
 });
 
-// PATCH /api/groups/:id/requests/:userId — owner accepts or rejects
+// ── PATCH /api/groups/:id/requests/:requestUserId ─────────────
 router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (req, res) => {
-  const { action } = req.body; // 'accept' | 'reject'
+  const { action } = req.body;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
@@ -240,7 +218,6 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
     return res.json({ ok: true });
   }
 
-  // Accept — add to group
   const acceptRequest = db.transaction(() => {
     db.prepare(
       'INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime("now"))'
@@ -267,7 +244,7 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
   res.json({ ok: true });
 });
 
-// POST /api/groups/:id/invite — owner generates invite token
+// ── POST /api/groups/:id/invite ───────────────────────────────
 router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
@@ -285,7 +262,7 @@ router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
   res.json({ token, invite_url: inviteUrl, expires_at: expiresAt });
 });
 
-// DELETE /api/groups/:id/members/:memberId — owner removes a member
+// ── DELETE /api/groups/:id/members/:memberId ──────────────────
 router.delete('/:id/members/:memberId', requireAuth, requireGroupMember, (req, res) => {
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
@@ -306,6 +283,23 @@ router.delete('/:id/members/:memberId', requireAuth, requireGroupMember, (req, r
   const removed = removeMember();
   if (!removed) return res.status(404).json({ error: 'Member not found' });
   res.json({ ok: true });
+});
+
+// ── GET /api/groups/:id — must be last ────────────────────────
+router.get('/:id', (req, res) => {
+  const group = db.prepare(`
+    SELECT g.id, g.name,
+      COUNT(DISTINCT gm.user_id) AS member_count,
+      COUNT(DISTINCT s.id) AS season_count
+    FROM groups g
+    LEFT JOIN group_members gm ON gm.group_id = g.id
+    LEFT JOIN seasons s ON s.group_id = g.id
+    WHERE g.id = ?
+    GROUP BY g.id
+  `).get(req.params.id);
+
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  res.json(group);
 });
 
 export default router;
