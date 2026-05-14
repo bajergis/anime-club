@@ -2,7 +2,7 @@
 
 A full-stack web application for tracking a friend group's anime assignment rotation — built as a portfolio project demonstrating application design.
 
-**Live:** `https://aniroll.co` &nbsp;|&nbsp; **Stack:** Node.js · React · SQLite · Kubernetes · GitHub Actions
+**Live:** `https://aniroll.co` &nbsp;|&nbsp; **Stack:** Node.js · React · SQLite · Railway · GitHub Actions
 
 ---
 
@@ -15,6 +15,7 @@ Each roll, a weighted derangement algorithm assigns every participating member t
 - Genre affinity breakdown across seasons
 - Season best/worst shows and averages
 - Completion/drop rates per member
+- Group insights: best taste, hardest to please, best taste alignment, longest streak
 
 ---
 
@@ -22,49 +23,34 @@ Each roll, a weighted derangement algorithm assigns every participating member t
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Kubernetes Cluster (anime-club namespace)                  │
+│  Railway Service                                            │
 │                                                             │
-│  ┌──────────────────┐        ┌──────────────────────────┐  │
-│  │  Frontend Pod(s)  │        │    API Pod(s)             │  │
-│  │  React + Nginx    │◄──────►│    Express + SQLite       │  │
-│  │  (2 replicas)     │        │    (2–6 replicas, HPA)   │  │
-│  └──────────────────┘        └──────────┬───────────────┘  │
-│                                          │                   │
-│  ┌───────────────────────────────────────▼───────────────┐  │
-│  │  PersistentVolumeClaim  (anime-club-db-pvc, 1Gi)      │  │
-│  │  SQLite WAL-mode database                             │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │  CronJob: daily SQLite → S3 backup at 3 AM UTC        │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  Ingress (nginx) + cert-manager TLS                         │
+│  Express + SQLite (serves React frontend as static files)  │
+│  /app/data/anime-club.db  (PVC)                            │
+│  /app/data/sessions.db    (session store)                  │
 └─────────────────────────────────────────────────────────────┘
          │                         │
     AniList GraphQL API        GitHub Actions CI/CD
-    (external)                 build → push → kustomize apply
+    (external)                 build frontend → deploy
 ```
 
 ### Key Design Decisions
 
-**SQLite over Postgres** — Small fixed user base (4–6 people), write volume is extremely low. SQLite in WAL mode on a PVC is simpler and cheaper. Daily CronJob backup provides durability.
+**SQLite over Postgres** — Small fixed user base, write volume is extremely low. SQLite in WAL mode on a Railway PVC is simpler and cheaper.
 
-**AniList OAuth for auth** — Members log in via AniList. The callback upserts a `users` row and sets a session. Unknown AniList accounts are redirected to `/not-invited` — registration is closed by default.
+**Single Railway service** — Frontend is built at deploy time and served as static files by Express. This avoids cross-domain cookie issues with session auth.
 
-**Groups model** — All data (seasons, members, assignments) is scoped to a `group_id`. The middleware chain is `requireAuth → requireGroupMember`, which reads `req.session.groupId` set at login. Cross-group data access is impossible at the query level.
+**AniList OAuth for auth** — Members log in via AniList. The callback upserts a `users` row and sets a session. Three auth states exist: `member` (in a group), `no_group` (logged in, no group yet), and unauthenticated.
 
-**Weighted derangement** — Roll assignments use a two-tier weighted algorithm. Season-level pair history (strength 1.5) is corrected more aggressively than long-term historical drift (strength 0.3), so no single season feels repetitive but the randomness isn't fully eliminated.
+**Groups model** — All data (seasons, members, assignments) is scoped to a `group_id`. The middleware chain is `requireAuth → requireGroupMember`. Cross-group data access is impossible at the query level.
 
-**Roll lifecycle** — Rolls have four states: `drafting` (lock-in lobby) → `selecting` (blind picks from planning lists) → `active` (roll revealed, watching in progress) → `completed`. The dashboard and seasons page gate actions based on current roll state.
+**Weighted derangement** — Roll assignments use a two-tier weighted algorithm. Season-level pair history (strength 1.5) is corrected more aggressively than long-term historical drift (strength 0.3).
 
-**Kustomize overlays** — `k8s/base/` holds canonical manifests; `overlays/dev` and `overlays/prod` patch replicas, image tags, and env vars. No Helm.
+**Roll lifecycle** — Rolls have four states: `drafting` (lock-in lobby) → `selecting` (blind picks from planning lists) → `active` (roll revealed, watching in progress) → `completed`.
 
 ---
 
 ## Database Schema
-
-Beyond the original tables, the following were added:
 
 ```sql
 -- Auth and groups
@@ -72,34 +58,45 @@ users (id TEXT PK, anilist_id, anilist_token, username, avatar_url, created_at)
 groups (id INTEGER PK, name, owner_id → users.id, created_at)
 group_members (group_id → groups.id, user_id → users.id, joined_at)
 group_invites (id, token UNIQUE, group_id, created_by, expires_at, used_at, used_by)
+join_requests (id, group_id, user_id, anilist_username, avatar_url, requested_at, status)
+
+-- Core data
+members (id TEXT PK, name, anilist_username, avatar_url, anilist_token, anilist_id, group_id, user_id, created_at)
+seasons (id, name, started_at, ended_at, is_active, group_id, roll_count)
+rolls (id, season_id, roll_number, roll_date, state, title)
+assignments (id, roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data, rating, episodes_watched, total_episodes, status, notes, created_at, updated_at)
 
 -- Roll lifecycle
-rolls.state TEXT DEFAULT 'active'  -- drafting | selecting | active | completed
 roll_readiness (roll_id, member_id, locked_at)
 roll_selections (id, roll_id, assigner_id, assignee_id, anime_title, anilist_id, anilist_data, selected_at)
-
--- Foreign keys added to existing tables
-members.group_id → groups.id
-members.user_id → users.id
-seasons.group_id → groups.id
-seasons.roll_count INTEGER  -- max rolls per season
+derangement_history (id, season_id, roll_id, result JSON, created_at)
 ```
 
-Key migration notes:
-- Run `migrate.sql` on a fresh DB to add all new tables and columns
-- Existing `members` rows need `group_id` and `user_id` backfilled manually
-- Existing `seasons` rows need `group_id` backfilled
-- Existing `rolls` rows default to `state = 'active'` — mark completed ones manually
+Key notes:
+- `members.id` uses short text PKs (`"jsn"`, `"olx"`) for legacy reasons. New members use their AniList username as ID.
+- `rolls.state` — `drafting | selecting | active | completed`
+- `rolls.title` — optional theme/title per roll
+- `seasons.roll_count NULL` means unlimited rolls for that season
 
 ---
 
-## Roll Flow (New)
+## Roll Flow
 
-1. **Season page / Seasons page** — owner clicks "Create Roll Lobby" → `POST /api/seasons/:id/rolls` creates a roll in `drafting` state, navigates to `/roll/:id`
-2. **Roll page (drafting)** — members click "Lock In"; owner sees readiness list polled every 3s. Owner can "Generate Assignments" (all locked in) or "Force Start — Pick Members" (custom member picker, overrides lock-in)
-3. **Roll page (selecting)** — each assigner sees their assignee's AniList planning list. Others see "picking for X..." status. Picks are blind. On submit, server checks if all assigners have picked and auto-reveals if so
-4. **Roll page (active)** — assignments revealed, normal watching/rating flow. AniList progress syncs on load
-5. **Roll page (completed)** — same as active, read-only editing if all are done
+1. **Seasons page** — owner clicks "Create Roll Lobby" → roll created in `drafting` state, navigates to `/roll/:id`
+2. **Roll page (drafting)** — members click "Lock In"; owner sees readiness list polled every 3s. Owner can "Generate Assignments" or "Force Start — Pick Members"
+3. **Roll page (selecting)** — each assigner sees their assignee's AniList planning list. Picks are blind. Auto-reveals when all done.
+4. **Roll page (active)** — assignments revealed, watching/rating flow. AniList progress syncs on load.
+5. **Roll page (completed)** — same as active, read-only.
+
+---
+
+## Groups & Invites Flow
+
+1. New user logs in via AniList → lands on `/no-group`
+2. Options: **Create a group** (become owner), **Enter invite code**, **Search for a group**
+3. Owner can generate invite links (48hr expiry, one-time use) from `/group`
+4. Anyone can search groups and send a join request; owner accepts/rejects from `/group`
+5. `/join?token=` — shareable invite link; works pre-login (token stored in sessionStorage through AniList OAuth flow)
 
 ---
 
@@ -108,34 +105,58 @@ Key migration notes:
 ### Assignments
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET`  | `/api/assignments` | List (filter: `season_id`, `roll_id`, `member_id`, `assigner_id`) — scoped to group |
+| `GET`  | `/api/assignments` | List (filter: `season_id`, `roll_id`, `member_id`, `assigner_id`) |
 | `POST` | `/api/assignments` | Create; auto-fetches AniList metadata |
 | `PATCH`| `/api/assignments/:id` | Update rating, episodes, status, notes |
-| `DELETE`| `/api/assignments/:id` | Delete assignment — scoped to group |
+| `DELETE`| `/api/assignments/:id` | Delete assignment |
 | `POST` | `/api/assignments/:id/refresh-anilist` | Re-fetch AniList data |
 | `POST` | `/api/assignments/bulk-refresh-anilist?season_id=` | Backfill AniList data; streams SSE progress |
 
 ### Seasons
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET`  | `/api/seasons` | List all seasons for group (includes `rolls_completed` count) |
+| `GET`  | `/api/seasons` | List all seasons for group |
 | `GET`  | `/api/seasons/active` | Active season + rolls + `currentRollState` |
-| `POST` | `/api/seasons` | Create season; accepts `name`, `started_at`, `roll_count` |
+| `POST` | `/api/seasons` | Create season |
 | `PATCH`| `/api/seasons/:id` | Edit name, dates, active status, roll_count |
 | `GET`  | `/api/seasons/:id/rolls` | List rolls for a season |
 | `DELETE`| `/api/seasons/:id/rolls/:rollId` | Remove a roll and its assignments |
-| `POST` | `/api/seasons/:id/rolls` | Create roll in `drafting` state (or `active` if `skip_derangement: true`) |
+| `POST` | `/api/seasons/:id/rolls` | Create roll in `drafting` state; accepts optional `title` |
 
 ### Rolls
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET`  | `/api/rolls/:id` | Roll metadata |
-| `GET`  | `/api/rolls/:id/status` | Live state: readiness, selections, derangement — poll this |
+| `GET`  | `/api/rolls/:id/status` | Live state: readiness, selections, derangement |
 | `POST` | `/api/rolls/:id/lock-in` | Lock in for this roll |
 | `DELETE`| `/api/rolls/:id/lock-in` | Un-ready (drafting only) |
-| `POST` | `/api/rolls/:id/generate` | Owner: run derangement, move to selecting. Body: `{ member_ids? }` for force start |
+| `POST` | `/api/rolls/:id/generate` | Owner: run derangement, move to selecting |
 | `POST` | `/api/rolls/:id/select` | Submit anime pick; auto-reveals when all done |
 | `PATCH`| `/api/rolls/:id/state` | Owner: manual state override |
+| `PATCH`| `/api/rolls/:id/title` | Owner: set or update roll title |
+
+### Groups
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/api/groups/search?q=` | Public group search |
+| `GET`  | `/api/groups/join?token=` | Validate invite token, return group info |
+| `POST` | `/api/groups` | Create a group (becomes owner) |
+| `POST` | `/api/groups/join` | Consume invite token and join group |
+| `GET`  | `/api/groups/:id` | Public group profile |
+| `POST` | `/api/groups/:id/invite` | Owner: generate invite token |
+| `POST` | `/api/groups/:id/request` | Request to join group |
+| `GET`  | `/api/groups/:id/requests` | Owner: list pending join requests |
+| `PATCH`| `/api/groups/:id/requests/:userId` | Owner: accept or reject request |
+| `DELETE`| `/api/groups/:id/members/:memberId` | Owner: remove a member |
+
+### Stats
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/api/stats/overview` | Group totals + insights (best taste, hardest to please, alignment, streak) |
+| `GET`  | `/api/stats/members` | Per-member stats, genre affinity, taste offset, ratings over time |
+| `GET`  | `/api/stats/season/:id` | Season-level breakdown |
+| `GET`  | `/api/stats/head-to-head` | Assigner→assignee rating matrix |
+| `GET`  | `/api/stats/ratings-over-time/:memberId` | Per-roll ratings for chart |
 
 ### Other
 | Method | Path | Description |
@@ -144,11 +165,7 @@ Key migration notes:
 | `GET/PATCH` | `/api/members/:id` | Member detail / update |
 | `GET`  | `/api/anime/search?q=` | AniList search proxy |
 | `POST` | `/api/anime/anilist-proxy` | Raw AniList GraphQL proxy |
-| `GET`  | `/api/stats/overview` | Global totals — scoped to group |
-| `GET`  | `/api/stats/members` | Per-member stats, genre affinity, taste offset |
-| `GET`  | `/api/stats/season/:id` | Season-level breakdown |
-| `GET`  | `/api/stats/head-to-head` | Assigner→assignee rating matrix |
-| `GET`  | `/auth/me` | Current session member + group info |
+| `GET`  | `/auth/me` | Current session — returns `{ state, ...member }` |
 | `GET`  | `/auth/anilist` | Start AniList OAuth flow |
 | `GET`  | `/auth/callback` | AniList OAuth callback |
 | `POST` | `/auth/logout` | Destroy session |
@@ -160,22 +177,30 @@ Key migration notes:
 
 1. User hits `/auth/anilist` → redirected to AniList OAuth
 2. AniList redirects to `/auth/callback?code=` → server exchanges code for token, fetches AniList profile
-3. If `anilist_username` matches an existing `members` row → session set (`memberId`, `memberName`, `groupId`), redirect to frontend
-4. If no match → redirect to `/not-invited` (closed registration)
-5. On login, `users` table is upserted with latest token and avatar
+3. `users` table upserted regardless of membership status
+4. If `anilist_username` matches an existing `members` row → session set, redirect to frontend
+5. If no match → `userId`, `anilistUsername`, `avatarUrl` stored in session, redirect to `/no-group`
 
-Session cookie is `httpOnly`, `secure` in production, `sameSite: none` in production / `lax` in development. All API fetches must include `credentials: "include"`.
+Session cookie is `httpOnly`, `secure` in production, `sameSite: lax`. All API fetches must include `credentials: "include"`.
+
+### Auth States
+
+```js
+// member === undefined → still loading
+// authState === 'member' → logged in with group, full access
+// authState === 'no_group' → logged in, no group yet → /no-group
+// member === null → not logged in → /login
+const { member, authState, logout, authBase } = useAuth();
+```
 
 ---
 
 ## Middleware
 
-Every API route is protected. Located at `backend/middleware/auth.js`:
+Located at `backend/middleware/auth.js`:
 
-- `requireAuth` — rejects 401 if no `req.session.memberId`
-- `requireGroupMember` — verifies `req.session.groupId` membership via `group_members` join; sets `req.groupId` for downstream query scoping
-
-Applied as `router.use(requireAuth, requireGroupMember)` at the top of each router. `anime.js` gets `requireAuth` only (it's a proxy, not group-scoped).
+- `requireAuth` — rejects 401 if no `req.session.userId`
+- `requireGroupMember` — verifies `req.session.groupId` membership; sets `req.groupId`
 
 ---
 
@@ -183,62 +208,19 @@ Applied as `router.use(requireAuth, requireGroupMember)` at the top of each rout
 
 ```
 src/
-├── main.jsx                  ← wraps App in AuthProvider
-├── App.jsx                   ← Nav (sidebar), ProtectedRoute, LoginPage, NotInvitedPage
-├── lib/
-│   └── AuthContext.jsx       ← useAuth() hook; fetches /auth/me once, provides member/logout/authBase
+├── main.jsx
+├── App.jsx                ← Nav, ProtectedRoute, LoginPage, NoGroupPage, JoinPage
+├── lib/AuthContext.jsx    ← useAuth() hook
 └── pages/
-    ├── Dashboard.jsx         ← banner, global stats, current roll (or drafting/selecting prompt), members
-    ├── Seasons.jsx           ← season list, new season form (with roll_count), new roll lobby creator
-    ├── Season.jsx            ← collapsible roll panels, season avg/best/worst banner, member breakdown
-    ├── Roll.jsx              ← state-driven: DraftingView | SelectingView | ActiveView
-    ├── Member.jsx            ← member profile and assignment history
-    ├── Stats.jsx             ← per-member stats, head-to-head matrix
-    └── Admin.jsx             ← edit seasons, add historical rolls (new/existing roll), bulk AniList refresh, delete entries
+    ├── Dashboard.jsx
+    ├── Seasons.jsx
+    ├── Season.jsx         ← collapsible roll panels with optional title display
+    ├── Roll.jsx           ← DraftingView | SelectingView | ActiveView
+    ├── Member.jsx
+    ├── Stats.jsx          ← Recharts line/bar charts, group insights
+    ├── GroupManage.jsx    ← member list, join requests, invite link generator
+    └── Admin.jsx
 ```
-
-### AuthContext
-
-```js
-const { member, logout, authBase } = useAuth();
-// member: { id, name, avatar_url, group_id, group_name, owner_id, ... }
-// logout: async fn that calls POST /auth/logout and nulls member
-// authBase: VITE_API_URL with /api stripped
-```
-
-`member === undefined` means still loading. `member === null` means not logged in. `ProtectedRoute` in `App.jsx` handles redirecting null to `/login`.
-
-### Roll page state machine
-
-```
-drafting   → DraftingView  (lock-in lobby, owner generates)
-selecting  → SelectingView (assigners pick from planning list or search)
-active     → ActiveView    (assignment cards, AniList sync, inline edit)
-completed  → ActiveView    (same, read-only editing)
-```
-
-The page polls `GET /api/rolls/:id/status` every 3 seconds during `drafting` and `selecting`.
-
----
-
-## Derangement Algorithm
-
-Located at `backend/services/derangement.js`.
-
-**`generateWeightedDerangement(members, seasonCounts, historyCounts)`**
-
-Uses weighted random selection with two-tier bias correction:
-
-```
-weight = 1 / (1 + 1.5 * season_times + 0.3 * total_times)
-```
-
-- `season_times`: how many times this assigner→assignee pair occurred in the **current season**
-- `total_times`: pair count across **all seasons**
-- Season bias corrected aggressively (1.5), historical drift corrected gently (0.3)
-- Falls back to pure random `generateDerangement()` if no history or if weighted approach fails
-
-The generate route (`POST /api/rolls/:id/generate`) queries `assignments` for completed rolls in the group, builds both count maps, and calls `generateWeightedDerangement`. Accepts optional `member_ids` body param for force start with a custom participant list.
 
 ---
 
@@ -255,8 +237,7 @@ cd anime-club
 cd backend
 npm install
 mkdir -p data
-cp .env.example .env   # fill in ANILIST_CLIENT_ID, ANILIST_CLIENT_SECRET, ANILIST_REDIRECT_URI, SESSION_SECRET, FRONTEND_URL
-node seed.js           # import historical Excel data (optional)
+cp .env.example .env
 npm run dev            # starts on :3001
 
 # Frontend (separate terminal)
@@ -277,19 +258,17 @@ ANILIST_CLIENT_SECRET=<from anilist.co/settings/developer>
 ANILIST_REDIRECT_URI=http://localhost:3001/auth/callback
 ```
 
-**Important:** AniList only allows one redirect URI per app. Create a separate AniList app for local dev pointing to `localhost:3001/auth/callback`, and a separate one for production pointing to your Railway/production URL.
+**Important:** AniList only allows one redirect URI per app. Create a separate AniList app for local dev.
 
-### Database Setup (first time)
+### Database Setup
 
 ```bash
 sqlite3 ./data/anime-club.db < migrate.sql
 ```
 
-Then seed your group directly in SQLite (see `migrate.sql` for the pattern — insert users, create group, fill group_members, backfill group_id on members and seasons).
-
 ### Production Deploy (Railway)
 
-Push to `main` — GitHub Actions handles the rest. Required Railway env vars: same as above but with production values. `NODE_ENV=production` enables secure cookies and `sameSite: none`.
+Push to `main` — GitHub Actions handles the rest. `railway.toml` at repo root configures the build and start commands.
 
 ---
 
@@ -297,75 +276,43 @@ Push to `main` — GitHub Actions handles the rest. Required Railway env vars: s
 
 ```
 anime-club/
-├── .github/workflows/deploy.yml      ← CI/CD
+├── railway.toml
+├── .github/workflows/deploy.yml
 ├── backend/
-│   ├── server.js                     ← Express entry; mounts all routers
-│   ├── db.js                         ← SQLite connection (WAL mode)
-│   ├── migrate.sql                   ← schema migration: groups, users, roll lifecycle tables
-│   ├── middleware/
-│   │   └── auth.js                   ← requireAuth, requireGroupMember
+│   ├── server.js
+│   ├── db.js
+│   ├── migrate.sql
+│   ├── middleware/auth.js
 │   ├── routes/
-│   │   ├── anime.js                  ← AniList search + proxy
-│   │   ├── assignments.js            ← CRUD + AniList refresh, group-scoped
-│   │   ├── members.js                ← group-scoped members
-│   │   ├── rolls.js                  ← roll lifecycle: lock-in, generate, select, status
-│   │   ├── seasons.js                ← seasons + roll creation, group-scoped
-│   │   ├── stats.js                  ← all stats, group-scoped
-│   │   └── auth.js                   ← AniList OAuth, session management
+│   │   ├── anime.js
+│   │   ├── assignments.js
+│   │   ├── auth.js
+│   │   ├── groups.js
+│   │   ├── members.js
+│   │   ├── rolls.js
+│   │   ├── seasons.js
+│   │   └── stats.js
 │   └── services/
-│       ├── anilist.js                ← GraphQL client
-│       └── derangement.js            ← weighted + pure random derangement
+│       ├── anilist.js
+│       └── derangement.js
 ├── frontend/
-│   ├── src/
-│   │   ├── main.jsx                  ← entry, wraps in AuthProvider
-│   │   ├── App.jsx                   ← routing, Nav, ProtectedRoute
-│   │   ├── lib/AuthContext.jsx        ← auth state, useAuth hook
-│   │   └── pages/                    ← Dashboard, Seasons, Season, Roll, Member, Stats, Admin
-│   └── ...
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx
+│       ├── lib/AuthContext.jsx
+│       └── pages/
 └── k8s/
-    ├── base/                         ← canonical manifests
-    └── overlays/dev + prod           ← kustomize patches
+    ├── base/
+    └── overlays/dev + prod
 ```
 
 ---
 
-## Known Quirks and Context
+## Known Quirks
 
-- **Members table uses text IDs** (e.g. `"jsn"`, `"olx"`) not integers — these are the original short names used as PKs since before the auth system was added
-- **Avatar URLs** are stored on both `members` and `users` tables — `members.avatar_url` is what the frontend uses, updated on each login via the OAuth callback
-- **AniList sync** in `ActiveView` runs on mount and overwrites local `episodes_watched`/`status` — disable it temporarily when testing locally by commenting out the sync block
-- **`roll_count` null** means unlimited rolls for that season (legacy seasons have null)
-- **Production group is `group_id = 1`**, local dev group may differ depending on migration order — if 403s appear after local setup, check that `members.group_id` matches `groups.id` and matches `req.session.groupId`
-- **CSP and avatar images** — helmet blocks external images by default; `s4.anilist.co` is whitelisted in the helmet config in `server.js`
-
----
-
-## TODO
-
-### Invite system (stubbed, not implemented)
-The `group_invites` table is already in the schema (`token`, `group_id`, `created_by`, `expires_at`, `used_at`, `used_by`). What's needed:
-- `POST /api/groups/invite` — owner generates a UUID token, inserts row with 48hr expiry
-- `GET /join?token=` — frontend page that shows group name and a "Join" button
-- `POST /api/groups/join` — validates token (not expired, not used), creates `group_members` row and a `members` row, marks token as used
-- The "not invited" page should eventually link to a join flow or show a contact message
-
-### New user / no group flow
-Currently if someone logs in and has no matching `members` row they hit `/not-invited`. The full flow would be:
-- "No group" state: show "Create a group or join one with an invite link"
-- Create group: user becomes owner and first member
-- Join group: via invite token flow above
-
-### Migration tooling
-Schema changes are currently applied manually via `sqlite3 < migrate.sql`. A proper migration runner (e.g. `better-sqlite3-migrations`) would track which migrations have run in a `_migrations` table, making deploys safer. The numbered SQL files are already in place conceptually.
-
-### Roll page — reveal animation
-When `selecting → active`, the page currently just re-fetches and re-renders. A reveal animation (cards flipping in one by one) would be a nice touch.
-
-### Stats page — pair history visualization
-The weighted derangement tracks assigner→assignee pair counts but there's no UI to see the distribution. A heatmap on the stats page showing how evenly distributed pairs are across seasons would be useful, especially for debugging perceived bias.
-
-### Admin — roll state override UI
-`PATCH /api/rolls/:id/state` exists but there's no UI for it in the Admin page. Useful for recovering from stuck rolls without SSH.
-
-### Production backup automation
-Currently backups are manual (`railway ssh -- base64 /app/data/anime-club.db > backup.b64`). The CronJob in `k8s/base/cron-backup.yaml` is the intended solution — needs S3 credentials configured in Railway and the job manifests applied.
+- **Members table uses text IDs** (`"jsn"`, `"olx"`) — legacy PKs from before the auth system
+- **Avatar URLs** stored on both `members` and `users` — `members.avatar_url` is what the frontend uses
+- **AniList sync** in `ActiveView` runs on mount — comment out sync block when testing locally
+- **`roll_count` null** means unlimited rolls for that season
+- **SQLite string literals** must use single quotes in SQL — double quotes are identifiers in SQLite
+- **`req.session.save()`** must be called explicitly before redirects after setting session values
