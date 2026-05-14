@@ -170,13 +170,13 @@ router.post('/:id/request', requireAuth, (req, res) => {
   if (existing) return res.status(409).json({ error: 'Already in a group' });
 
   const alreadyRequested = db.prepare(
-    'SELECT 1 FROM join_requests WHERE user_id = ? AND group_id = ? AND status = "pending"'
+    `SELECT 1 FROM join_requests WHERE user_id = ? AND group_id = ? AND status = 'pending'`
   ).get(userId, req.params.id);
   if (alreadyRequested) return res.status(409).json({ error: 'Request already pending' });
 
   db.prepare(`
     INSERT INTO join_requests (group_id, user_id, anilist_username, avatar_url, requested_at, status)
-    VALUES (?, ?, ?, ?, datetime("now"), "pending")
+    VALUES (?, ?, ?, ?, datetime("now"), 'pending')
   `).run(req.params.id, userId, req.session.anilistUsername, req.session.avatarUrl);
 
   res.json({ ok: true });
@@ -190,7 +190,7 @@ router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
 
   const requests = db.prepare(`
     SELECT * FROM join_requests
-    WHERE group_id = ? AND status = "pending"
+    WHERE group_id = ? AND status = 'pending'
     ORDER BY requested_at ASC
   `).all(req.params.id);
 
@@ -207,13 +207,13 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
   if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Not the group owner' });
 
   const request = db.prepare(
-    'SELECT * FROM join_requests WHERE group_id = ? AND user_id = ? AND status = "pending"'
+    `SELECT * FROM join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'`
   ).get(req.params.id, req.params.requestUserId);
   if (!request) return res.status(404).json({ error: 'Request not found' });
 
   if (action === 'reject') {
     db.prepare(
-      'UPDATE join_requests SET status = "rejected" WHERE group_id = ? AND user_id = ?'
+      `UPDATE join_requests SET status = 'rejected' WHERE group_id = ? AND user_id = ?`
     ).run(req.params.id, req.params.requestUserId);
     return res.json({ ok: true });
   }
@@ -236,7 +236,7 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
     );
 
     db.prepare(
-      'UPDATE join_requests SET status = "accepted" WHERE group_id = ? AND user_id = ?'
+      `UPDATE join_requests SET status = 'accepted' WHERE group_id = ? AND user_id = ?`
     ).run(req.params.id, req.params.requestUserId);
   });
 

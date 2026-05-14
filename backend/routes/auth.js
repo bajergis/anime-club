@@ -18,6 +18,7 @@ router.get("/me", (req, res) => {
   if (req.session.memberId) {
     const member = db.prepare(`
       SELECT m.id, m.name, m.anilist_username, m.avatar_url, m.group_id,
+             m.user_id,
              g.name AS group_name, g.owner_id
       FROM members m
       LEFT JOIN groups g ON g.id = m.group_id

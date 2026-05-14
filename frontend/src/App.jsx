@@ -11,6 +11,7 @@ import { useAuth } from "./lib/AuthContext";
 import logo from "./assets/icon.png";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import GroupManage from "./pages/GroupManage";
 
 function Nav() {
   const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
@@ -23,6 +24,7 @@ function Nav() {
     { to: "/", label: "Dashboard", icon: "⊞" },
     { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/stats", label: "Stats", icon: "◈" },
+    { to: "/group", label: "Group", icon: "⊛" },
     ...(member?.id === "jsn" ? [{ to: "/admin", label: "Admin", icon: "⚙" }] : []),
   ];
 
@@ -142,6 +144,7 @@ export default function App() {
             <Route path="/roll/:id" element={<ProtectedRoute><Roll /></ProtectedRoute>} />
             <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+            <Route path="/group" element={<ProtectedRoute><GroupManage /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>
