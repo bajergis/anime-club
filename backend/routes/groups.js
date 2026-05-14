@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
-import { requireAuth, requireGroupMember } from '../middleware/auth.js';
+import { requireAuth, requireGroupMember, requireUser } from '../middleware/auth.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -11,7 +11,7 @@ router.use((req, res, next) => {
 });
 
 // ── GET /api/groups/search?q= ─────────────────────────────────
-router.get('/search', (req, res) => {
+router.get('/search', requireUser, (req, res) => {
   const { q } = req.query;
   if (!q?.trim()) return res.json([]);
 
@@ -32,7 +32,7 @@ router.get('/search', (req, res) => {
 });
 
 // ── GET /api/groups/join?token= ───────────────────────────────
-router.get('/join', (req, res) => {
+router.get('/join', requireUser, (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).json({ error: 'No token provided' });
 
@@ -58,7 +58,7 @@ router.get('/join', (req, res) => {
 });
 
 // ── POST /api/groups — create a group ────────────────────────
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireUser, (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Group name is required' });
 
@@ -72,12 +72,12 @@ router.post('/', requireAuth, (req, res) => {
 
   const createGroup = db.transaction(() => {
     const groupResult = db.prepare(
-      'INSERT INTO groups (name, owner_id, created_at) VALUES (?, ?, datetime("now"))'
+      `INSERT INTO groups (name, owner_id, created_at) VALUES (?, ?, datetime('now'))`
     ).run(name.trim(), userId);
     const groupId = groupResult.lastInsertRowid;
 
     db.prepare(
-      'INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime("now"))'
+      `INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime('now'))`
     ).run(groupId, userId);
 
     const username = req.session.anilistUsername;
@@ -104,7 +104,7 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 // ── POST /api/groups/join — consume invite token ──────────────
-router.post('/join', requireAuth, (req, res) => {
+router.post('/join', requireUser, (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'No token provided' });
 
@@ -129,7 +129,7 @@ router.post('/join', requireAuth, (req, res) => {
     const avatarUrl = req.session.avatarUrl;
 
     db.prepare(
-      'INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime("now"))'
+      `INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime('now'))`
     ).run(invite.group_id, userId);
 
     db.prepare(`
@@ -138,7 +138,7 @@ router.post('/join', requireAuth, (req, res) => {
     `).run(username, username, username, avatarUrl, invite.group_id, userId);
 
     db.prepare(`
-      UPDATE group_invites SET used_at = datetime("now"), used_by = ? WHERE token = ?
+      UPDATE group_invites SET used_at = datetime('now'), used_by = ? WHERE token = ?
     `).run(userId, token);
 
     return { groupId: invite.group_id, username };
@@ -157,7 +157,7 @@ router.post('/join', requireAuth, (req, res) => {
 });
 
 // ── POST /api/groups/:id/request ──────────────────────────────
-router.post('/:id/request', requireAuth, (req, res) => {
+router.post('/:id/request', requireUser, (req, res) => {
   const userId = req.session.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
@@ -176,7 +176,7 @@ router.post('/:id/request', requireAuth, (req, res) => {
 
   db.prepare(`
     INSERT INTO join_requests (group_id, user_id, anilist_username, avatar_url, requested_at, status)
-    VALUES (?, ?, ?, ?, datetime("now"), 'pending')
+    VALUES (?, ?, ?, ?, datetime('now'), 'pending')
   `).run(req.params.id, userId, req.session.anilistUsername, req.session.avatarUrl);
 
   res.json({ ok: true });
@@ -220,7 +220,7 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
 
   const acceptRequest = db.transaction(() => {
     db.prepare(
-      'INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime("now"))'
+      `INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime('now'))`
     ).run(req.params.id, req.params.requestUserId);
 
     db.prepare(`
