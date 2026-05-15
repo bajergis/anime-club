@@ -5,6 +5,7 @@ export function requireUser(req, res, next) {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not logged in' });
   }
+  req.userId = req.session.userId;
   next();
 }
 
@@ -24,7 +25,9 @@ export function requireAuth(req, res, next) {
     return res.status(403).json({ error: 'Member not found' });
   }
 
+  req.userId = req.session.userId;
   req.groupId = Number(member.group_id);
+
   next();
 }
 

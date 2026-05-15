@@ -55,9 +55,6 @@ function ForceStartPicker({ groupMembers, generating, onGenerate }) {
               onChange={() => toggle(m.id)}
               style={{ width: "auto" }}
             />
-            {m.avatar_url && (
-              <img src={m.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover" }} />
-            )}
             {m.name}
           </label>
         ))}
@@ -164,7 +161,7 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
                   border: `1px solid ${locked ? "rgba(100,200,100,0.3)" : "var(--border)"}`,
                 }}>
                   {m.avatar_url
-                    ? <img src={m.avatar_url} alt={m.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+                    ? <img src={m.avatar_url} alt={m.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", marginRight: "10px" }} />
                     : <div className="avatar">{m.name?.charAt(0)}</div>
                   }
                   <div style={{ flex: 1, fontWeight: 600 }}>{m.name}</div>
@@ -395,7 +392,7 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                   border: "1px solid rgba(100,200,100,0.3)",
                 }}>
                   {selected.cover && (
-                    <img src={selected.cover} alt="" style={{ width: 36, height: 52, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
+                    <img src={selected.cover} alt="" style={{ width: 36, height: 52, objectFit: "cover", borderRadius: 3, flexShrink: 0, marginRight: 10 }} />
                   )}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{selected.anime_title}</div>
@@ -495,7 +492,7 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                           })}
                         >
                           {r.cover_image_medium && (
-                            <img src={r.cover_image_medium} alt="" style={{ width: 32, height: 46, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
+                            <img src={r.cover_image_medium} alt="" style={{ width: 32, height: 46, objectFit: "cover", borderRadius: 3, flexShrink: 0, marginRight: 10 }} />
                           )}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{r.title_english || r.title_romaji}</div>

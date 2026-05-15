@@ -10,9 +10,15 @@ router.use(requireAuth, requireGroupMember);
 // ── GET /api/rolls/:id/status ─────────────────────────────────
 router.get('/:id/status', (req, res) => {
   const roll = db.prepare(`
-    SELECT r.*, s.group_id, s.name AS season_name, s.id AS season_id
+    SELECT
+      r.*,
+      s.group_id,
+      s.name AS season_name,
+      s.id AS season_id,
+      g.owner_id
     FROM rolls r
     JOIN seasons s ON r.season_id = s.id
+    JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
@@ -132,7 +138,7 @@ router.post('/:id/generate', (req, res) => {
       pairCounts[`${row.assigner_id}→${row.assignee_id}`] = row.times;
     }
 
-    const derangement = generateWeightedDerangement(participants, pairCounts);
+    const derangement = generateWeightedDerangement(participants, {}, pairCounts);
 
     db.prepare(
       'INSERT OR REPLACE INTO derangement_history (season_id, roll_id, result) VALUES (?, ?, ?)'
@@ -198,9 +204,10 @@ router.post('/:id/select', async (req, res) => {
 // ── GET /api/rolls/:id ────────────────────────────────────────
 router.get('/:id', (req, res) => {
   const roll = db.prepare(`
-    SELECT r.*, s.group_id, s.name AS season_name, s.owner_id
+    SELECT r.*, s.group_id, s.name AS season_name, g.owner_id
     FROM rolls r
     JOIN seasons s ON r.season_id = s.id
+    JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
@@ -214,8 +221,9 @@ router.patch('/:id/state', (req, res) => {
   if (!validStates.includes(state)) return res.status(400).json({ error: 'Invalid state' });
 
   const roll = db.prepare(`
-    SELECT r.*, s.owner_id FROM rolls r
+    SELECT r.*, g.owner_id FROM rolls r
     JOIN seasons s ON r.season_id = s.id
+    JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
@@ -233,11 +241,19 @@ router.patch('/:id/state', (req, res) => {
 
 // ── PATCH /api/rolls/:id/title ────────────────────────────────
 router.patch('/:id/title', (req, res) => {
-  const { title } = req.body;
+  const rollTitle = req.body.title?.trim() || null;
+
+  if (rollTitle && rollTitle.length > 40) {
+    return res.status(400).json({
+      error: 'Roll title must be 40 characters or less'
+    });
+  }
 
   const roll = db.prepare(`
-    SELECT r.*, s.owner_id FROM rolls r
+    SELECT r.*, g.owner_id
+    FROM rolls r
     JOIN seasons s ON r.season_id = s.id
+    JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
@@ -249,7 +265,7 @@ router.patch('/:id/title', (req, res) => {
     return res.status(403).json({ error: 'Only the group owner can set the roll title' });
   }
 
-  db.prepare('UPDATE rolls SET title = ? WHERE id = ?').run(title || null, req.params.id);
+  db.prepare('UPDATE rolls SET title = ? WHERE id = ?').run(rollTitle, req.params.id);
   res.json({ ok: true });
 });
 

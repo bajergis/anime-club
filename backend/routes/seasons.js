@@ -7,6 +7,22 @@ const router = Router();
 
 router.use(requireAuth, requireGroupMember);
 
+function requireOwner(req, res, next) {
+  const group = db.prepare(
+    'SELECT owner_id FROM groups WHERE id = ?'
+  ).get(req.groupId);
+
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  if (group.owner_id !== req.userId) {
+    return res.status(403).json({ error: 'Only the group owner can do this' });
+  }
+
+  next();
+}
+
 // GET /api/seasons
 router.get('/', (req, res) => {
   res.json(db.prepare(`
@@ -36,15 +52,45 @@ router.get('/active', (req, res) => {
 });
 
 // POST /api/seasons
-router.post('/', (req, res) => {
+router.post('/', requireOwner, (req, res) => {
   const { name, started_at, roll_count } = req.body;
-  db.prepare('UPDATE seasons SET is_active = 0 WHERE group_id = ?').run(req.groupId);
-  const result = db.prepare(
-    'INSERT INTO seasons (name, started_at, roll_count, is_active, group_id) VALUES (?, ?, ?, 1, ?)'
-  ).run(
-    name,
+  const seasonName = name?.trim();
+  if (!seasonName) {
+    return res.status(400).json({ error: 'Season name is required' });
+  }
+
+  if (seasonName.length < 2 || seasonName.length > 60) {
+    return res.status(400).json({
+      error: 'Season name must be 2–60 characters'
+    });
+  }
+
+  const parsedRollCount =
+    roll_count === undefined || roll_count === null || roll_count === ''
+      ? null
+      : Number(roll_count);
+
+  if (
+    parsedRollCount !== null &&
+    (!Number.isInteger(parsedRollCount) || parsedRollCount < 1 || parsedRollCount > 100)
+  ) {
+    return res.status(400).json({
+      error: 'Roll count must be a whole number between 1 and 100'
+    });
+  }
+
+  db.prepare(
+    'UPDATE seasons SET is_active = 0 WHERE group_id = ?'
+  ).run(req.groupId);
+
+  const result = db.prepare(`
+    INSERT INTO seasons
+    (name, started_at, roll_count, is_active, group_id)
+    VALUES (?, ?, ?, 1, ?)
+  `).run(
+    seasonName,
     started_at || new Date().toISOString().split('T')[0],
-    roll_count ?? null,
+    parsedRollCount,
     req.groupId,
   );
   res.status(201).json({ id: result.lastInsertRowid });
@@ -71,7 +117,7 @@ router.get('/:id/rolls', (req, res) => {
 });
 
 // PATCH /api/seasons/:id
-router.patch('/:id', (req, res) => {
+router.patch('/:id', requireOwner, (req, res) => {
   const season = db.prepare(
     'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
   ).get(req.params.id, req.groupId);
@@ -92,7 +138,7 @@ router.patch('/:id', (req, res) => {
 });
 
 // DELETE /api/seasons/:id/rolls/:rollId
-router.delete('/:id/rolls/:rollId', (req, res) => {
+router.delete('/:id/rolls/:rollId', requireOwner, (req, res) => {
   const season = db.prepare(
     'SELECT id FROM seasons WHERE id = ? AND group_id = ?'
   ).get(req.params.id, req.groupId);
@@ -105,8 +151,16 @@ router.delete('/:id/rolls/:rollId', (req, res) => {
 });
 
 // POST /api/seasons/:id/rolls
-router.post('/:id/rolls', (req, res) => {
+router.post('/:id/rolls', requireOwner, (req, res) => {
   const { roll_date, member_ids, skip_derangement, title } = req.body;
+
+  const rollTitle = title?.trim() || null;
+
+  if (rollTitle && rollTitle.length > 40) {
+    return res.status(400).json({
+      error: 'Roll title must be 40 characters or less'
+    });
+  }
 
   const season = db.prepare(
     'SELECT * FROM seasons WHERE id = ? AND group_id = ?'
@@ -131,7 +185,7 @@ router.post('/:id/rolls', (req, res) => {
     roll_number,
     roll_date || new Date().toISOString().split('T')[0],
     skip_derangement ? 'active' : 'drafting',
-    title || null,
+    rollTitle,
   );
   const roll_id = rollResult.lastInsertRowid;
 

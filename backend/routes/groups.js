@@ -60,32 +60,57 @@ router.get('/join', requireUser, (req, res) => {
 // ── POST /api/groups — create a group ────────────────────────
 router.post('/', requireUser, (req, res) => {
   const { name } = req.body;
-  if (!name?.trim()) return res.status(400).json({ error: 'Group name is required' });
+  const groupName = name?.trim();
+  if (!groupName) {
+    return res.status(400).json({ error: 'Group name is required' });
+  }
+  if (groupName.length < 2 || groupName.length > 40) {
+    return res.status(400).json({
+      error: 'Group name must be 2–40 characters'
+    });
+  }
 
   const userId = req.session.userId;
 
   const existing = db.prepare(
     'SELECT 1 FROM group_members WHERE user_id = ?'
   ).get(userId);
-  if (existing) return res.status(409).json({ error: 'You are already in a group' });
+
+  if (existing) {
+    return res.status(409).json({
+      error: 'You are already in a group'
+    });
+  }
 
   const createGroup = db.transaction(() => {
     const groupResult = db.prepare(
-      `INSERT INTO groups (name, owner_id, created_at) VALUES (?, ?, datetime('now'))`
-    ).run(name.trim(), userId);
+      `INSERT INTO groups (name, owner_id, created_at)
+       VALUES (?, ?, datetime('now'))`
+    ).run(groupName, userId);
+
     const groupId = groupResult.lastInsertRowid;
 
     db.prepare(
-      `INSERT INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, datetime('now'))`
+      `INSERT INTO group_members
+       (group_id, user_id, joined_at)
+       VALUES (?, ?, datetime('now'))`
     ).run(groupId, userId);
 
     const username = req.session.anilistUsername;
     const avatarUrl = req.session.avatarUrl;
 
     db.prepare(`
-      INSERT INTO members (id, name, anilist_username, avatar_url, group_id, user_id)
+      INSERT INTO members
+      (id, name, anilist_username, avatar_url, group_id, user_id)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(username, username, username, avatarUrl, groupId, userId);
+    `).run(
+      username,
+      username,
+      username,
+      avatarUrl,
+      groupId,
+      userId
+    );
 
     return { groupId, username };
   });
@@ -97,8 +122,15 @@ router.post('/', requireUser, (req, res) => {
   req.session.groupId = groupId;
 
   req.session.save(err => {
-    if (err) return res.status(500).json({ error: 'Session save failed' });
-    res.status(201).json({ group_id: groupId });
+    if (err) {
+      return res.status(500).json({
+        error: 'Session save failed'
+      });
+    }
+
+    res.status(201).json({
+      group_id: groupId
+    });
   });
 });
 
@@ -180,7 +212,7 @@ router.post('/:id/request', requireUser, (req, res) => {
 });
 
 // ── GET /api/groups/:id/requests ──────────────────────────────
-router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
+router.get('/:id/requests', requireGroupMember, (req, res) => {
   if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
@@ -197,7 +229,7 @@ router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
 });
 
 // ── PATCH /api/groups/:id/requests/:requestUserId ─────────────
-router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (req, res) => {
+router.patch('/:id/requests/:requestUserId', requireGroupMember, (req, res) => {
   if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
 
   const { action } = req.body;
@@ -217,6 +249,14 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
       `UPDATE join_requests SET status = 'rejected' WHERE group_id = ? AND user_id = ?`
     ).run(req.params.id, req.params.requestUserId);
     return res.json({ ok: true });
+  }
+
+  const existingMember = db.prepare(
+    'SELECT 1 FROM group_members WHERE user_id = ?'
+  ).get(req.params.requestUserId);
+
+  if (existingMember) {
+    return res.status(409).json({ error: 'User is already in a group' });
   }
 
   const acceptRequest = db.transaction(() => {
@@ -246,7 +286,7 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
 });
 
 // ── POST /api/groups/:id/invite ───────────────────────────────
-router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
+router.post('/:id/invite', requireGroupMember, (req, res) => {
   if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
@@ -266,7 +306,7 @@ router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
 });
 
 // ── DELETE /api/groups/:id/members/:memberId ──────────────────
-router.delete('/:id/members/:memberId', requireAuth, requireGroupMember, (req, res) => {
+router.delete('/:id/members/:memberId', requireGroupMember, (req, res) => {
   if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
