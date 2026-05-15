@@ -63,7 +63,6 @@ router.post('/', requireUser, (req, res) => {
   if (!name?.trim()) return res.status(400).json({ error: 'Group name is required' });
 
   const userId = req.session.userId;
-  if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
   const existing = db.prepare(
     'SELECT 1 FROM group_members WHERE user_id = ?'
@@ -109,7 +108,6 @@ router.post('/join', requireUser, (req, res) => {
   if (!token) return res.status(400).json({ error: 'No token provided' });
 
   const userId = req.session.userId;
-  if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
   const invite = db.prepare(
     'SELECT * FROM group_invites WHERE token = ?'
@@ -159,7 +157,6 @@ router.post('/join', requireUser, (req, res) => {
 // ── POST /api/groups/:id/request ──────────────────────────────
 router.post('/:id/request', requireUser, (req, res) => {
   const userId = req.session.userId;
-  if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
   const group = db.prepare('SELECT id FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
@@ -184,9 +181,11 @@ router.post('/:id/request', requireUser, (req, res) => {
 
 // ── GET /api/groups/:id/requests ──────────────────────────────
 router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
+  if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
+
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
-  if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Not the group owner' });
+  if (group.owner_id !== req.userId) return res.status(403).json({ error: 'Not the group owner' });
 
   const requests = db.prepare(`
     SELECT * FROM join_requests
@@ -199,12 +198,14 @@ router.get('/:id/requests', requireAuth, requireGroupMember, (req, res) => {
 
 // ── PATCH /api/groups/:id/requests/:requestUserId ─────────────
 router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (req, res) => {
+  if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
+
   const { action } = req.body;
   if (!['accept', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
-  if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Not the group owner' });
+  if (group.owner_id !== req.userId) return res.status(403).json({ error: 'Not the group owner' });
 
   const request = db.prepare(
     `SELECT * FROM join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'`
@@ -246,9 +247,11 @@ router.patch('/:id/requests/:requestUserId', requireAuth, requireGroupMember, (r
 
 // ── POST /api/groups/:id/invite ───────────────────────────────
 router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
+  if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
+
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
-  if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Not the group owner' });
+  if (group.owner_id !== req.userId) return res.status(403).json({ error: 'Not the group owner' });
 
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -264,9 +267,11 @@ router.post('/:id/invite', requireAuth, requireGroupMember, (req, res) => {
 
 // ── DELETE /api/groups/:id/members/:memberId ──────────────────
 router.delete('/:id/members/:memberId', requireAuth, requireGroupMember, (req, res) => {
+  if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
+
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
-  if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Not the group owner' });
+  if (group.owner_id !== req.userId) return res.status(403).json({ error: 'Not the group owner' });
   if (req.params.memberId === req.session.memberId) return res.status(400).json({ error: "Can't remove yourself" });
 
   const removeMember = db.transaction(() => {
@@ -297,8 +302,6 @@ router.get('/:id', (req, res) => {
     WHERE g.id = ?
     GROUP BY g.id
   `).get(req.params.id);
-
-  console.log('[groups/:id] result:', group);
 
   if (!group) return res.status(404).json({ error: 'Group not found' });
   res.json(group);

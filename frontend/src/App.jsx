@@ -5,7 +5,6 @@ import Seasons from "./pages/Seasons";
 import Member from "./pages/Member";
 import Roll from "./pages/Roll";
 import Stats from "./pages/Stats";
-import Admin from "./pages/Admin";
 import "./App.css";
 import { useAuth } from "./lib/AuthContext";
 import logo from "./assets/icon.png";
@@ -25,7 +24,6 @@ function Nav() {
     { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/stats", label: "Stats", icon: "◈" },
     { to: "/group", label: "Group", icon: "⊛" },
-    ...(member?.id === "jsn" ? [{ to: "/admin", label: "Admin", icon: "⚙" }] : []),
   ];
 
   return (
@@ -143,7 +141,6 @@ export default function App() {
             <Route path="/member/:id" element={<ProtectedRoute><Member /></ProtectedRoute>} />
             <Route path="/roll/:id" element={<ProtectedRoute><Roll /></ProtectedRoute>} />
             <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><GroupManage /></ProtectedRoute>} />
           </Routes>
         </main>

@@ -218,8 +218,7 @@ src/
     ├── Roll.jsx           ← DraftingView | SelectingView | ActiveView
     ├── Member.jsx
     ├── Stats.jsx          ← Recharts line/bar charts, group insights
-    ├── GroupManage.jsx    ← member list, join requests, invite link generator
-    └── Admin.jsx
+    └── GroupManage.jsx    ← member list, join requests, invite link generator
 ```
 
 ---

@@ -16,7 +16,7 @@ export default function GroupManage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const isOwner = member?.owner_id === member?.user_id || String(member?.owner_id) === String(member?.id);
+  const isOwner = !!member?.owner_id && member.owner_id === member.user_id;
 
   useEffect(() => {
     if (!member?.group_id) return;

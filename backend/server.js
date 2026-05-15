@@ -5,8 +5,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import Database from 'better-sqlite3';
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
 import assignmentsRouter from './routes/assignments.js';
 import animeRouter from './routes/anime.js';
 import membersRouter from './routes/members.js';
@@ -22,6 +20,11 @@ import { existsSync } from 'fs';
 import groupsRouter from './routes/groups.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is not set — refusing to start");
+}
+
 const SQLiteStore = connectSqlite3(session);
 const app = express();
 app.set("trust proxy", 1);
@@ -35,7 +38,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "*.anilist.co", "*.anilistcdn.net"],
@@ -63,8 +66,8 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
-    maxAge: 1000 * 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    maxAge: 1000 * 60 * 60 * 24 * 7,
   }
 }));
 
