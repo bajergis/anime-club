@@ -4,14 +4,12 @@ import "dotenv/config";
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import Database from 'better-sqlite3';
 import assignmentsRouter from './routes/assignments.js';
 import animeRouter from './routes/anime.js';
 import membersRouter from './routes/members.js';
 import seasonsRouter from './routes/seasons.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
-import { db } from './db.js';
 import connectSqlite3 from "connect-sqlite3";
 import rollsRouter from './routes/rolls.js';
 import { fileURLToPath } from 'url';
@@ -24,15 +22,22 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is not set — refusing to start");
 }
-
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const strictLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 const SQLiteStore = connectSqlite3(session);
 const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3001;
-
-const DB_PATH = process.env.NODE_ENV === "production"
-  ? "/app/data/anime-club.db"
-  : "./data/anime-club.db";
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -54,7 +59,8 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
+app.use("/api", generalLimiter);
+app.use("/auth", strictLimiter);
 app.use(session({
   store: new SQLiteStore({
     db: "sessions.db",

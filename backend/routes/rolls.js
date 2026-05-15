@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAuth, requireGroupMember } from '../middleware/auth.js';
-import { generateDerangement, generateWeightedDerangement } from '../services/derangement.js';
+import { generateWeightedDerangement } from '../services/derangement.js';
 
 const router = Router();
 
@@ -24,14 +24,15 @@ router.get('/:id/status', (req, res) => {
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
 
   const readiness = db.prepare(`
-    SELECT rr.member_id, m.name, rr.locked_at
+    SELECT rr.member_id, m.name, rr.locked_at, rr.max_episodes
+
     FROM roll_readiness rr
     JOIN members m ON m.id = rr.member_id
     WHERE rr.roll_id = ?
   `).all(req.params.id);
 
   const groupMembers = db.prepare(
-    'SELECT id, name, avatar_url FROM members WHERE group_id = ?'
+    'SELECT id, name, avatar_url, anilist_username FROM members WHERE group_id = ?'
   ).all(req.groupId);
 
   const selections = db.prepare(`
@@ -65,6 +66,32 @@ router.post('/:id/lock-in', (req, res) => {
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
   if (roll.state !== 'drafting') return res.status(409).json({ error: 'Roll is not in drafting state' });
 
+  const existingDerangement = db.prepare(
+    'SELECT 1 FROM derangement_history WHERE roll_id = ?'
+  ).get(req.params.id);
+
+  if (existingDerangement) {
+    return res.status(409).json({
+      error: 'Roll has already been generated'
+    });
+  }
+
+  const { max_episodes } = req.body ?? {};
+
+  const maxEpisodes =
+    max_episodes === undefined || max_episodes === null || max_episodes === ''
+      ? null
+      : Number(max_episodes);
+
+  if (
+    maxEpisodes !== null &&
+    (!Number.isInteger(maxEpisodes) || maxEpisodes < 1 || maxEpisodes > 5000)
+  ) {
+    return res.status(400).json({
+      error: 'Episode limit must be a whole number between 1 and 5000'
+    });
+  }
+
   // req.session.memberId is the members.id (e.g. "jsn")
   const member = db.prepare(
     'SELECT id FROM members WHERE id = ? AND group_id = ?'
@@ -72,8 +99,13 @@ router.post('/:id/lock-in', (req, res) => {
   if (!member) return res.status(404).json({ error: 'Member not found' });
 
   db.prepare(`
-    INSERT OR IGNORE INTO roll_readiness (roll_id, member_id) VALUES (?, ?)
-  `).run(req.params.id, member.id);
+    INSERT INTO roll_readiness (roll_id, member_id, max_episodes)
+    VALUES (?, ?, ?)
+    ON CONFLICT(roll_id, member_id)
+    DO UPDATE SET
+      max_episodes = excluded.max_episodes,
+      locked_at = CURRENT_TIMESTAMP
+  `).run(req.params.id, member.id, maxEpisodes);
 
   res.json({ ok: true });
 });
@@ -120,8 +152,38 @@ router.post('/:id/generate', (req, res) => {
       : db.prepare('SELECT member_id FROM roll_readiness WHERE roll_id = ?')
           .all(req.params.id).map(r => r.member_id);
 
-    if (participants.length < 2) {
-      return res.status(400).json({ error: 'Need at least 2 members' });
+    const validMembers = db.prepare(`
+      SELECT id
+      FROM members
+      WHERE group_id = ?
+    `).all(req.groupId);
+
+    const validMemberIds = new Set(
+      validMembers.map(m => m.id)
+    );
+
+    const invalidParticipants = participants.filter(
+      id => !validMemberIds.has(id)
+    );
+
+    if (invalidParticipants.length) {
+      return res.status(400).json({
+        error: 'Invalid participant IDs'
+      });
+    }
+
+    const uniqueParticipants = [...new Set(participants)];
+
+    if (uniqueParticipants.length !== participants.length) {
+      return res.status(400).json({
+        error: 'Duplicate participants are not allowed'
+      });
+    }
+
+    if (uniqueParticipants.length < 2) {
+      return res.status(400).json({
+        error: 'Need at least 2 members'
+      });
     }
 
     const historicalPairs = db.prepare(`
@@ -138,7 +200,7 @@ router.post('/:id/generate', (req, res) => {
       pairCounts[`${row.assigner_id}→${row.assignee_id}`] = row.times;
     }
 
-    const derangement = generateWeightedDerangement(participants, {}, pairCounts);
+    const derangement = generateWeightedDerangement(uniqueParticipants, {}, pairCounts);
 
     db.prepare(
       'INSERT OR REPLACE INTO derangement_history (season_id, roll_id, result) VALUES (?, ?, ?)'
@@ -173,6 +235,29 @@ router.post('/:id/select', async (req, res) => {
   const derangement = JSON.parse(derangementRow.result);
   const assigneeId = derangement[req.session.memberId];
   if (!assigneeId) return res.status(403).json({ error: 'You are not an assigner in this roll' });
+
+  const assigneeReadiness = db.prepare(`
+    SELECT max_episodes
+    FROM roll_readiness
+    WHERE roll_id = ? AND member_id = ?
+  `).get(req.params.id, assigneeId);
+
+  const maxEpisodes = assigneeReadiness?.max_episodes ?? null;
+
+  const submittedEpisodes =
+    anilist_data?.episodes ??
+    anilist_data?.total_episodes ??
+    null;
+
+  if (
+    maxEpisodes !== null &&
+    submittedEpisodes !== null &&
+    submittedEpisodes > maxEpisodes
+  ) {
+    return res.status(400).json({
+      error: `This pick exceeds the assignee's ${maxEpisodes}-episode limit`
+    });
+  }
 
   if (!anime_title?.trim()) return res.status(400).json({ error: 'anime_title is required' });
 
@@ -217,25 +302,40 @@ router.get('/:id', (req, res) => {
 // ── PATCH /api/rolls/:id/state ────────────────────────────────
 router.patch('/:id/state', (req, res) => {
   const { state } = req.body;
-  const validStates = ['drafting', 'selecting', 'active', 'completed'];
-  if (!validStates.includes(state)) return res.status(400).json({ error: 'Invalid state' });
 
   const roll = db.prepare(`
-    SELECT r.*, g.owner_id FROM rolls r
+    SELECT r.*, g.owner_id
+    FROM rolls r
     JOIN seasons s ON r.season_id = s.id
     JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
+
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
 
   const sessionMember = db.prepare(
     'SELECT user_id FROM members WHERE id = ? AND group_id = ?'
   ).get(req.session.memberId, req.groupId);
+
   if (sessionMember?.user_id !== roll.owner_id) {
     return res.status(403).json({ error: 'Only the group owner can change roll state' });
   }
 
+  const allowedTransitions = {
+    drafting: ['selecting'],
+    selecting: ['active'],
+    active: ['completed'],
+    completed: []
+  };
+
+  if (!allowedTransitions[roll.state]?.includes(state)) {
+    return res.status(400).json({
+      error: `Cannot change roll from ${roll.state} to ${state}`
+    });
+  }
+
   db.prepare('UPDATE rolls SET state = ? WHERE id = ?').run(state, roll.id);
+
   res.json({ ok: true });
 });
 
@@ -256,16 +356,25 @@ router.patch('/:id/title', (req, res) => {
     JOIN groups g ON g.id = s.group_id
     WHERE r.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
+
   if (!roll) return res.status(404).json({ error: 'Roll not found' });
 
   const sessionMember = db.prepare(
     'SELECT user_id FROM members WHERE id = ? AND group_id = ?'
   ).get(req.session.memberId, req.groupId);
+
   if (sessionMember?.user_id !== roll.owner_id) {
     return res.status(403).json({ error: 'Only the group owner can set the roll title' });
   }
 
+  if (roll.state !== 'drafting' && roll.state !== 'selecting') {
+    return res.status(409).json({
+      error: 'Cannot edit title after roll becomes active'
+    });
+  }
+
   db.prepare('UPDATE rolls SET title = ? WHERE id = ?').run(rollTitle, req.params.id);
+
   res.json({ ok: true });
 });
 

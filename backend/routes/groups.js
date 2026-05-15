@@ -2,18 +2,35 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAuth, requireGroupMember, requireUser } from '../middleware/auth.js';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
+const groupsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.use(groupsLimiter);
+
 router.use((req, res, next) => {
-  console.log(`[groups] ${req.method} ${req.path}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[groups] ${req.method} ${req.path}`);
+  }
   next();
 });
 
 // ── GET /api/groups/search?q= ─────────────────────────────────
 router.get('/search', requireUser, (req, res) => {
-  const { q } = req.query;
-  if (!q?.trim()) return res.json([]);
+  const q = req.query.q?.trim();
+
+  if (!q) return res.json([]);
+
+  if (q.length > 60) {
+    return res.status(400).json({ error: 'Search query is too long' });
+  }
 
   const results = db.prepare(`
     SELECT g.id, g.name,
@@ -26,7 +43,7 @@ router.get('/search', requireUser, (req, res) => {
     GROUP BY g.id
     ORDER BY member_count DESC
     LIMIT 20
-  `).all(`%${q.trim()}%`);
+  `).all(`%${q}%`);
 
   res.json(results);
 });
@@ -35,7 +52,9 @@ router.get('/search', requireUser, (req, res) => {
 router.get('/join', requireUser, (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).json({ error: 'No token provided' });
-
+  if (typeof token !== 'string' || token.length > 100) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
   const invite = db.prepare(`
     SELECT gi.*, g.name AS group_name,
       COUNT(DISTINCT gm.user_id) AS member_count
@@ -138,7 +157,9 @@ router.post('/', requireUser, (req, res) => {
 router.post('/join', requireUser, (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'No token provided' });
-
+  if (typeof token !== 'string' || token.length > 100) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
   const userId = req.session.userId;
 
   const invite = db.prepare(

@@ -83,25 +83,139 @@ router.post('/', async (req, res) => {
 // PATCH /api/assignments/:id
 router.patch('/:id', (req, res) => {
   const existing = db.prepare(`
-    SELECT a.id FROM assignments a
+    SELECT a.id, a.assignee_id
+    FROM assignments a
     JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
     WHERE a.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
-  if (!existing) return res.status(404).json({ error: 'Not found' });
 
-  const { rating, episodes_watched, status, notes, anilist_id } = req.body;
+  if (!existing) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  // Only the assignee can update their own assignment
+  if (existing.assignee_id !== req.session.memberId) {
+    return res.status(403).json({
+      error: 'Only the assignee can update this assignment'
+    });
+  }
+
+  const {
+    rating,
+    episodes_watched,
+    status,
+    notes,
+    anilist_id
+  } = req.body;
+
+  const validStatuses = [
+    'pending',
+    'watching',
+    'completed',
+    'dropped',
+    'hiatus'
+  ];
+
+  // ── Validation ───────────────────────────
+
+  if (rating !== undefined && rating !== null && rating !== '') {
+    const parsed = Number(rating);
+
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) {
+      return res.status(400).json({
+        error: 'Rating must be between 0 and 10'
+      });
+    }
+  }
+
+  if (
+    episodes_watched !== undefined &&
+    episodes_watched !== null &&
+    episodes_watched !== ''
+  ) {
+    const parsed = Number(episodes_watched);
+
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 10000) {
+      return res.status(400).json({
+        error: 'Episodes watched must be a non-negative whole number'
+      });
+    }
+  }
+
+  if (
+    status !== undefined &&
+    !validStatuses.includes(status)
+  ) {
+    return res.status(400).json({
+      error: 'Invalid status'
+    });
+  }
+
+  if (
+    notes !== undefined &&
+    notes !== null &&
+    String(notes).length > 1000
+  ) {
+    return res.status(400).json({
+      error: 'Notes must be 1000 characters or less'
+    });
+  }
+
+  // ── Build update query ───────────────────
+
   const fields = [];
   const vals = [];
-  if (rating !== undefined)           { fields.push('rating = ?');           vals.push(rating); }
-  if (episodes_watched !== undefined) { fields.push('episodes_watched = ?'); vals.push(episodes_watched); }
-  if (status !== undefined)           { fields.push('status = ?');           vals.push(status); }
-  if (notes !== undefined)            { fields.push('notes = ?');            vals.push(notes); }
-  if (anilist_id !== undefined)       { fields.push('anilist_id = ?');       vals.push(anilist_id); }
-  if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  if (rating !== undefined) {
+    fields.push('rating = ?');
+    vals.push(
+      rating === null || rating === ''
+        ? null
+        : Number(rating)
+    );
+  }
+
+  if (episodes_watched !== undefined) {
+    fields.push('episodes_watched = ?');
+    vals.push(
+      episodes_watched === null || episodes_watched === ''
+        ? null
+        : Number(episodes_watched)
+    );
+  }
+
+  if (status !== undefined) {
+    fields.push('status = ?');
+    vals.push(status);
+  }
+
+  if (notes !== undefined) {
+    fields.push('notes = ?');
+    vals.push(notes?.trim() || null);
+  }
+
+  if (anilist_id !== undefined) {
+    fields.push('anilist_id = ?');
+    vals.push(anilist_id ?? null);
+  }
+
+  if (!fields.length) {
+    return res.status(400).json({
+      error: 'Nothing to update'
+    });
+  }
+
   fields.push('updated_at = CURRENT_TIMESTAMP');
+
   vals.push(req.params.id);
-  db.prepare(`UPDATE assignments SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
+
+  db.prepare(`
+    UPDATE assignments
+    SET ${fields.join(', ')}
+    WHERE id = ?
+  `).run(...vals);
+
   res.json({ ok: true });
 });
 
@@ -194,12 +308,17 @@ router.post('/bulk-refresh-anilist', async (req, res) => {
 
 router.delete('/:id', (req, res) => {
   const existing = db.prepare(`
-    SELECT a.id FROM assignments a
+    SELECT a.id, g.owner_id
+    FROM assignments a
     JOIN rolls r ON a.roll_id = r.id
     JOIN seasons s ON r.season_id = s.id
+    JOIN groups g ON g.id = s.group_id
     WHERE a.id = ? AND s.group_id = ?
   `).get(req.params.id, req.groupId);
   if (!existing) return res.status(404).json({ error: 'Not found' });
+  if (existing.owner_id !== req.userId) {
+    return res.status(403).json({ error: 'Only the group owner can delete assignments' });
+  }
   db.prepare('DELETE FROM assignments WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

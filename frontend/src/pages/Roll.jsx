@@ -81,7 +81,8 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
   const { readiness, groupMembers, roll } = status;
   const [locking, setLocking] = useState(false);
   const [generating, setGenerating] = useState(false);
-
+  const [episodeLimitMode, setEpisodeLimitMode] = useState("none");
+  const [maxEpisodes, setMaxEpisodes] = useState("");
   const isLockedIn = readiness.some(r => r.member_id === member?.id);
   const isOwner = roll?.owner_id === member?.user_id;
   const allLocked = groupMembers.length > 0 && readiness.length === groupMembers.length;
@@ -90,6 +91,13 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
     setLocking(true);
     await fetch(`${API}/rolls/${rollId}/lock-in`, {
       method: isLockedIn ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: isLockedIn
+        ? undefined
+        : JSON.stringify({
+            max_episodes:
+              episodeLimitMode === "limit" ? maxEpisodes : null
+          }),
       credentials: "include",
     });
     setLocking(false);
@@ -180,6 +188,33 @@ function DraftingView({ rollId, rollNumber, seasonName, status, member, onRefres
         {/* Actions */}
         <div className="card">
           <h2 className="mb-16">Your Status</h2>
+          {!isLockedIn && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: "0.8rem", marginBottom: 6 }}>
+                  How long can your assigned show be?
+                </label>
+
+                <select
+                  value={episodeLimitMode}
+                  onChange={e => setEpisodeLimitMode(e.target.value)}
+                  style={{ marginBottom: 8 }}
+                >
+                  <option value="none">No limit</option>
+                  <option value="limit">Set episode limit</option>
+                </select>
+
+                {episodeLimitMode === "limit" && (
+                  <input
+                    type="number"
+                    min="1"
+                    max="5000"
+                    value={maxEpisodes}
+                    onChange={e => setMaxEpisodes(e.target.value)}
+                    placeholder="Example: 26"
+                  />
+                )}
+              </div>
+            )}
           <div className="text-muted mb-16" style={{ fontSize: "0.8rem" }}>
             Lock in to confirm you're participating in this roll. You can un-ready until the owner generates assignments.
           </div>
@@ -228,10 +263,21 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
   const [loadingPlanning, setLoadingPlanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState(null); // { anime_title, anilist_id, anilist_data }
-
   const myAssigneeId = derangement?.[member?.id];
   const myAssignee = groupMembers.find(m => m.id === myAssigneeId);
   const hasSelected = selections.some(s => s.assigner_id === member?.id);
+
+  const myAssigneeLimit = status.readiness.find(
+    r => r.member_id === myAssigneeId
+  )?.max_episodes ?? null;
+
+  const visiblePlanningList = myAssigneeLimit
+    ? planningList.filter(m => !m.episodes || m.episodes <= myAssigneeLimit)
+    : planningList;
+
+  const visibleSearchResults = myAssigneeLimit
+    ? searchResults.filter(r => !r.episodes || r.episodes <= myAssigneeLimit)
+    : searchResults;
 
   useEffect(() => {
     if (!myAssigneeId || !myAssignee) return;
@@ -382,6 +428,11 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                     ? `Showing ${myAssignee?.name}'s AniList planning list. You can also search below.`
                     : `${myAssignee?.name} has nothing on their planning list — search AniList instead.`
                 }
+                {myAssigneeLimit && (
+                  <div className="text-muted mb-12" style={{ fontSize: "0.8rem", color: "var(--accent)" }}>
+                    Episode limit: {myAssigneeLimit} episodes or less.
+                  </div>
+                )}
               </div>
 
               {selected && (
@@ -406,13 +457,13 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
               )}
 
               {/* Planning list */}
-              {!selected && planningList.length > 0 && (
+              {!selected && visiblePlanningList.length > 0 && (
                 <div className="mb-16">
                   <div className="text-muted mb-8" style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {myAssignee?.name}'s Planning List
                   </div>
                   <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                    {planningList.map(m => (
+                    {visiblePlanningList.map(m => (
                       <div
                         key={m.id}
                         className="flex items-center gap-10"
@@ -473,9 +524,9 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                       {searching ? "..." : "Search"}
                     </button>
                   </div>
-                  {searchResults.length > 0 && (
+                  {visibleSearchResults.length > 0 && (
                     <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                      {searchResults.map(r => (
+                      {visibleSearchResults.map(r => (
                         <div
                           key={r.anilist_id}
                           className="flex items-center gap-10"
