@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-const AUTH = API.replace("/api", "");
 
 function RatingBar({ value, max = 10 }) {
   if (value == null) return <span className="text-muted" style={{ fontSize: "0.75rem" }}>—</span>;
@@ -48,6 +47,7 @@ export default function Dashboard() {
   const [currentRollState, setCurrentRollState] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingRequests, setPendingRequests] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -60,6 +60,14 @@ export default function Dashboard() {
       setActiveSeason(season);
       setMembers(mems);
       setAllSeasons(seasons);
+      if (authMember?.group_id) {
+        fetch(`${API}/groups/${authMember.group_id}/request-count`, {
+          credentials: "include"
+        })
+          .then(r => r.ok ? r.json() : { count: 0 })
+          .then(data => setPendingRequests(data.count ?? 0))
+          .catch(() => setPendingRequests(0));
+      }
       setLoading(false);
 
       if (season?.rolls?.length) {
@@ -74,7 +82,7 @@ export default function Dashboard() {
         }
       }
     });
-  }, []);
+  }, [authMember?.group_id]);
 
   if (loading) return <div className="loading">Loading...</div>;
 
@@ -221,6 +229,63 @@ export default function Dashboard() {
 
         {/* Members */}
         <div>
+          {pendingRequests > 0 && (
+            <Link
+              to="/group"
+              style={{ textDecoration: "none" }}
+            >
+              <div
+                className="card mb-16"
+                style={{
+                  padding: "14px 16px",
+                  border: "1px solid var(--gold)",
+                  background: "rgba(255, 198, 93, 0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      color: "var(--gold)",
+                      marginBottom: 2,
+                    }}
+                  >
+                    Join request pending
+                  </div>
+                  <div
+                    className="text-muted"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    {pendingRequests === 1
+                      ? "1 person wants to join your group."
+                      : `${pendingRequests} people want to join your group.`}
+                  </div>
+                </div>
+
+                <span
+                  style={{
+                    minWidth: 28,
+                    height: 28,
+                    borderRadius: 999,
+                    background: "var(--gold)",
+                    color: "var(--bg)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.8rem",
+                    fontWeight: 800,
+                  }}
+                >
+                  {pendingRequests}
+                </span>
+              </div>
+            </Link>
+          )}
           <div className="section-header">
             <h2>{authMember?.group_name ?? "Members"}</h2>
           </div>

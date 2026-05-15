@@ -351,6 +351,33 @@ router.delete('/:id/members/:memberId', requireGroupMember, (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/groups/:id/request-count
+router.get('/:id/request-count', requireGroupMember, (req, res) => {
+  if (Number(req.params.id) !== req.groupId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const group = db.prepare(
+    'SELECT owner_id FROM groups WHERE id = ?'
+  ).get(req.groupId);
+
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  if (group.owner_id !== req.userId) {
+    return res.json({ count: 0 });
+  }
+
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM join_requests
+    WHERE group_id = ? AND status = 'pending'
+  `).get(req.groupId);
+
+  res.json({ count: row.count });
+});
+
 // ── GET /api/groups/:id — must be last ────────────────────────
 router.get('/:id', (req, res) => {
   const group = db.prepare(`
