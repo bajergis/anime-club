@@ -1,18 +1,11 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
+import { syncAniListProgress, applySync } from "../lib/anilistSync";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 const STATUSES = ["pending", "watching", "completed", "dropped", "hiatus"];
-
-const STATUS_MAP = {
-  CURRENT: "watching",
-  COMPLETED: "completed",
-  DROPPED: "dropped",
-  PAUSED: "hiatus",
-  PLANNING: "pending",
-};
 
 function StatusBadge({ status }) {
   return <span className={`badge badge-${status || "pending"}`}>{status || "pending"}</span>;
@@ -177,33 +170,6 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
   );
 }
 
-// ── Collapsible Roll Panel ────────────────────────────────────
-async function syncAniListProgress(assignments, members) {
-  const updates = await Promise.all(
-    assignments
-      .filter(a => a.anilist_id)
-      .map(async a => {
-        const member = members.find(m => m.name === a.assignee_name);
-        if (!member?.anilist_username) return null;
-        const res = await fetch(`${API}/anime/anilist-proxy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: `query($username: String, $mediaId: Int) {
-              MediaList(userName: $username, mediaId: $mediaId) { progress status }
-            }`,
-            variables: { username: member.anilist_username, mediaId: a.anilist_id },
-          }),
-          credentials: "include",
-        }).then(r => r.json()).catch(() => null);
-        const entry = res?.data?.MediaList;
-        if (!entry) return null;
-        return { id: a.id, episodes_watched: entry.progress, status: STATUS_MAP[entry.status] || a.status };
-      })
-  );
-  return updates.filter(Boolean);
-}
-
 function RollPanel({ roll, members, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   const [assignments, setAssignments] = useState([]);
@@ -215,6 +181,19 @@ function RollPanel({ roll, members, defaultOpen = false }) {
     const data = await fetch(`${API}/assignments?roll_id=${roll.id}`, { credentials: "include" }).then(r => r.json());
     setAssignments(data);
     setLoaded(true);
+
+    // Auto-sync on open, same as Roll.jsx
+    setSyncing(true);
+    const updates = await syncAniListProgress(data, members);
+    if (updates.length) {
+      await applySync(updates, API);
+      setAssignments(prev => prev.map(a => {
+        const u = updates.find(u => u.id === a.id);
+        return u ? { ...a, ...u } : a;
+      }));
+    }
+    setSyncing(false);
+    setLastSynced(new Date());
   }
 
   // If open by default, load data immediately so panel doesn't show "Loading..."
@@ -231,14 +210,7 @@ function RollPanel({ roll, members, defaultOpen = false }) {
     setSyncing(true);
     const updates = await syncAniListProgress(assignments, members);
     if (updates.length) {
-      await Promise.all(updates.map(u =>
-        fetch(`${API}/assignments/${u.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ episodes_watched: u.episodes_watched, status: u.status }),
-          credentials: "include",
-        })
-      ));
+      await applySync(updates, API);
       setAssignments(prev => prev.map(a => {
         const u = updates.find(u => u.id === a.id);
         return u ? { ...a, ...u } : a;

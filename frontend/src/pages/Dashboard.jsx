@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
+import { syncAniListProgress, applySync } from "../lib/anilistSync";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -78,7 +79,17 @@ export default function Dashboard() {
         if (lastRoll.state === "active" || lastRoll.state === "completed" || !lastRoll.state) {
           fetch(`${API}/assignments?roll_id=${lastRoll.id}`, { credentials: "include" })
             .then(r => r.json())
-            .then(setCurrentRoll);
+            .then(async assignments => {
+              setCurrentRoll(assignments);
+              const updates = await syncAniListProgress(assignments, mems);
+              if (updates.length) {
+                await applySync(updates, API);
+                setCurrentRoll(prev => prev.map(a => {
+                  const u = updates.find(u => u.id === a.id);
+                  return u ? { ...a, ...u } : a;
+                }));
+              }
+            });
         }
       }
     });
