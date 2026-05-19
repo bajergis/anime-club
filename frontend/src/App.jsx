@@ -23,10 +23,10 @@ function Nav() {
 
   const links = [
     { to: "/", label: "Dashboard", icon: "⊞" },
-    { to: "/seasons", label: "Seasons", icon: "◉" },
-    { to: "/stats", label: "Stats", icon: "◈" },
     { to: "/group", label: "Group", icon: "⊛" },
+    { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/marathons", label: "Marathons", icon: "⧖" },
+    { to: "/stats", label: "Stats", icon: "◈" },
   ];
 
   return (
