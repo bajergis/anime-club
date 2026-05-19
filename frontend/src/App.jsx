@@ -11,6 +11,8 @@ import logo from "./assets/icon.png";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import GroupManage from "./pages/GroupManage";
+import Marathons from "./pages/Marathons";
+import Marathon from "./pages/Marathon";
 
 function Nav() {
   const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
@@ -24,6 +26,7 @@ function Nav() {
     { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/stats", label: "Stats", icon: "◈" },
     { to: "/group", label: "Group", icon: "⊛" },
+    { to: "/marathons", label: "Marathons", icon: "⧖" },
   ];
 
   return (
@@ -138,6 +141,8 @@ export default function App() {
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/seasons" element={<ProtectedRoute><Seasons /></ProtectedRoute>} />
             <Route path="/season/:id" element={<ProtectedRoute><Season /></ProtectedRoute>} />
+            <Route path="/marathons" element={<ProtectedRoute><Marathons /></ProtectedRoute>} />
+            <Route path="/marathon/:id" element={<ProtectedRoute><Marathon /></ProtectedRoute>} />
             <Route path="/member/:id" element={<ProtectedRoute><Member /></ProtectedRoute>} />
             <Route path="/roll/:id" element={<ProtectedRoute><Roll /></ProtectedRoute>} />
             <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
