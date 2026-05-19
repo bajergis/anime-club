@@ -24,11 +24,20 @@ function checkOwner(req, res) {
     return false;
   }
   return true;
+
+function normalizeAniListRating(score) {
+  if (score == null) return null;
+
+  const n = Number(score);
+  if (!Number.isFinite(n) || n <= 0) return null;
+
+  return n > 10 ? n / 10 : n;
 }
 
 // Try to fetch AniList rating for a member on a specific media
 async function fetchAniListRating(anilistUsername, anilistId) {
   if (!anilistUsername || !anilistId) return null;
+
   try {
     const res = await fetch('https://graphql.anilist.co', {
       method: 'POST',
@@ -40,13 +49,17 @@ async function fetchAniListRating(anilistUsername, anilistId) {
         variables: { username: anilistUsername, mediaId: anilistId },
       }),
     }).then(r => r.json());
+
     const entry = res?.data?.MediaList;
     if (!entry) return null;
+
     return {
-      rating: entry.score ? entry.score / 10 : null,
+      rating: normalizeAniListRating(entry.score),
       anilist_status: STATUS_MAP[entry.status] || null,
     };
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // ── GET /api/marathons ────────────────────────────────────────
