@@ -24,6 +24,7 @@ function checkOwner(req, res) {
     return false;
   }
   return true;
+}
 
 function normalizeAniListRating(score) {
   if (score == null) return null;
