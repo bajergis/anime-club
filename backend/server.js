@@ -17,6 +17,7 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import groupsRouter from './routes/groups.js';
 import marathonsRouter from './routes/marathons.js';
+import superadminRouter from './routes/superadmin.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -86,6 +87,7 @@ app.use('/api/members', membersRouter);
 app.use('/api/rolls', rollsRouter);
 app.use('/api/seasons', seasonsRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/superadmin', superadminRouter);
 app.use('/auth', authRouter);
 
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

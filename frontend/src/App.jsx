@@ -13,6 +13,8 @@ import { useSearchParams } from "react-router-dom";
 import GroupManage from "./pages/GroupManage";
 import Marathons from "./pages/Marathons";
 import Marathon from "./pages/Marathon";
+import SuperAdmin from "./pages/SuperAdmin";
+const ADMIN_IDS = (import.meta.env.VITE_ADMIN_USER_IDS || "").split(",").map(s => s.trim());
 
 function Nav() {
   const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
@@ -27,6 +29,7 @@ function Nav() {
     { to: "/seasons", label: "Seasons", icon: "◉" },
     { to: "/marathons", label: "Marathons", icon: "⧖" },
     { to: "/stats", label: "Stats", icon: "◈" },
+    ...(ADMIN_IDS.includes(member?.user_id) ? [{ to: "/superadmin", label: "Admin", icon: "⌬" }] : []),
   ];
 
   return (
@@ -146,6 +149,7 @@ export default function App() {
             <Route path="/member/:id" element={<ProtectedRoute><Member /></ProtectedRoute>} />
             <Route path="/roll/:id" element={<ProtectedRoute><Roll /></ProtectedRoute>} />
             <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
+            <Route path="/superadmin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
             <Route path="/group" element={<ProtectedRoute><GroupManage /></ProtectedRoute>} />
           </Routes>
         </main>

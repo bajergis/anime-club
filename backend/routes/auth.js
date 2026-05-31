@@ -107,6 +107,11 @@ router.get("/callback", async (req, res) => {
     viewer.avatar?.large,
   );
 
+  const userRecord = db.prepare('SELECT banned_at FROM users WHERE id = ?').get(`anilist:${viewer.id}`);
+  if (userRecord?.banned_at) {
+    return res.redirect(`${process.env.FRONTEND_URL}/login?banned=1`);
+  }
+
   const member = db.prepare(
     "SELECT * FROM members WHERE anilist_username = ?"
   ).get(viewer.name);
