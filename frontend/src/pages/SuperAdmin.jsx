@@ -239,25 +239,27 @@ function GroupRow({ group, allGroups, onRefresh }) {
 // ── Main SuperAdmin Page ──────────────────────────────────────
 export default function SuperAdmin() {
   const { member } = useAuth();
-  console.log("admin ids:", import.meta.env.VITE_ADMIN_USER_IDS);
-  console.log("my user_id:", member?.user_id);
   const [groups, setGroups] = useState([]);
+  const [ungrouped, setUngrouped] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const isAdmin = member?.user_id && ADMIN_IDS.includes(member.user_id);
+
+  useEffect(() => { if (isAdmin) load(); }, [isAdmin]);  // ← moved above early return
+
   if (!isAdmin) return <Navigate to="/" replace />;
 
-  useEffect(() => { load(); }, []);
-
   async function load() {
-    const [g, s] = await Promise.all([
+    const [g, s, u] = await Promise.all([
       fetch(`${AUTH}/api/superadmin/groups`, { credentials: "include" }).then(r => r.json()),
       fetch(`${AUTH}/api/superadmin/stats`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${AUTH}/api/superadmin/users`, { credentials: "include" }).then(r => r.json()),
     ]);
     setGroups(Array.isArray(g) ? g : []);
     setStats(s);
+    setUngrouped((Array.isArray(u) ? u : []).filter(x => !x.group_id));
     setLoading(false);
   }
 
@@ -325,6 +327,70 @@ export default function SuperAdmin() {
           </div>
         )}
       </div>
+
+      {ungrouped.length > 0 && (
+        <>
+          <div className="section-header mb-16" style={{ marginTop: 32 }}>
+            <h2>Ungrouped Users ({ungrouped.length})</h2>
+          </div>
+          <div className="card">
+            <div className="flex flex-col gap-8">
+              {ungrouped.map(u => (
+                <div key={u.id} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 14px", background: "var(--bg3)",
+                  borderRadius: "var(--radius)", border: `1px solid ${u.banned_at ? "rgba(248,113,113,0.3)" : "var(--border)"}`,
+                }}>
+                  {u.avatar_url
+                    ? <img src={u.avatar_url} alt={u.username} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+                    : <div className="avatar" style={{ width: 32, height: 32, fontSize: "0.7rem" }}>{u.username?.charAt(0)}</div>
+                  }
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.875rem", display: "flex", alignItems: "center", gap: 8 }}>
+                      {u.username}
+                      {u.banned_at && (
+                        <span style={{ fontSize: "0.65rem", color: "var(--red)", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 4, padding: "1px 5px" }}>BANNED</span>
+                      )}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: "0.7rem", fontFamily: "var(--font-mono)" }}>
+                      {u.id} · joined {new Date(u.created_at).toLocaleDateString()}
+                    </div>
+                    {u.banned_at && u.ban_reason && (
+                      <div style={{ fontSize: "0.7rem", color: "var(--red)", marginTop: 2 }}>Reason: {u.ban_reason}</div>
+                    )}
+                  </div>
+                  <div className="flex gap-8 items-center">
+                    {u.banned_at ? (
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={async () => {
+                          await fetch(`${AUTH}/api/superadmin/users/${u.id}/ban`, { method: "DELETE", credentials: "include" });
+                          load();
+                        }}
+                        style={{ color: "var(--green)", borderColor: "rgba(100,200,100,0.3)" }}>
+                        Unban
+                      </button>
+                    ) : (
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={async () => {
+                          await fetch(`${AUTH}/api/superadmin/users/${u.id}/ban`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ reason: "" }),
+                            credentials: "include",
+                          });
+                          load();
+                        }}
+                        style={{ color: "var(--red)", borderColor: "rgba(248,113,113,0.3)" }}>
+                        Ban
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
