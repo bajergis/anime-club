@@ -94,13 +94,6 @@ router.patch('/:id', (req, res) => {
     return res.status(404).json({ error: 'Not found' });
   }
 
-  // Only the assignee can update their own assignment
-  if (existing.assignee_id !== req.session.memberId) {
-    return res.status(403).json({
-      error: 'Only the assignee can update this assignment'
-    });
-  }
-
   const {
     rating,
     episodes_watched,
@@ -108,6 +101,12 @@ router.patch('/:id', (req, res) => {
     notes,
     anilist_id
   } = req.body;
+
+  const isAssignee = existing.assignee_id === req.session.memberId;
+
+  if (notes !== undefined && !isAssignee) {
+    return res.status(403).json({ error: 'Only the assignee can update notes' });
+  }
 
   const validStatuses = [
     'pending',
