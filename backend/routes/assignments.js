@@ -209,11 +209,30 @@ router.patch('/:id', (req, res) => {
 
   vals.push(req.params.id);
 
-  db.prepare(`
+db.prepare(`
     UPDATE assignments
     SET ${fields.join(', ')}
     WHERE id = ?
   `).run(...vals);
+
+  // Auto-complete roll when all assignments are done
+  const roll = db.prepare(`
+    SELECT r.id, r.state
+    FROM assignments a
+    JOIN rolls r ON a.roll_id = r.id
+    WHERE a.id = ?
+  `).get(req.params.id);
+
+  if (roll?.state === 'active') {
+    const pending = db.prepare(`
+      SELECT COUNT(*) as count FROM assignments
+      WHERE roll_id = ? AND status NOT IN ('completed', 'dropped')
+    `).get(roll.id);
+
+    if (pending.count === 0) {
+      db.prepare(`UPDATE rolls SET state = 'completed' WHERE id = ?`).run(roll.id);
+    }
+  }
 
   res.json({ ok: true });
 });
