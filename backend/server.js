@@ -18,6 +18,7 @@ import { existsSync } from 'fs';
 import groupsRouter from './routes/groups.js';
 import marathonsRouter from './routes/marathons.js';
 import superadminRouter from './routes/superadmin.js';
+import accountRouter from './routes/account.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -79,6 +80,7 @@ app.use(session({
   }
 }));
 
+app.use('/api/account', accountRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/anime', animeRouter);
 app.use('/api/groups', groupsRouter);

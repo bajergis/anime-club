@@ -326,28 +326,29 @@ router.post('/:id/invite', requireGroupMember, (req, res) => {
   res.json({ token, invite_url: inviteUrl, expires_at: expiresAt });
 });
 
-// ── DELETE /api/groups/:id/members/:memberId ──────────────────
-router.delete('/:id/members/:memberId', requireGroupMember, (req, res) => {
+// ── PATCH /api/groups/:id/members/:memberId — activate/deactivate ──
+router.patch('/:id/members/:memberId', requireGroupMember, (req, res) => {
   if (Number(req.params.id) !== req.groupId) return res.status(403).json({ error: 'Forbidden' });
 
   const group = db.prepare('SELECT * FROM groups WHERE id = ?').get(req.params.id);
   if (!group) return res.status(404).json({ error: 'Group not found' });
   if (group.owner_id !== req.userId) return res.status(403).json({ error: 'Not the group owner' });
-  if (req.params.memberId === req.session.memberId) return res.status(400).json({ error: "Can't remove yourself" });
 
-  const removeMember = db.transaction(() => {
-    const member = db.prepare(
-      'SELECT user_id FROM members WHERE id = ? AND group_id = ?'
-    ).get(req.params.memberId, req.params.id);
-    if (!member) return false;
+  const { active } = req.body;
+  if (typeof active !== 'boolean') return res.status(400).json({ error: 'active must be a boolean' });
 
-    db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(req.params.id, member.user_id);
-    db.prepare('DELETE FROM members WHERE id = ? AND group_id = ?').run(req.params.memberId, req.params.id);
-    return true;
-  });
+  const member = db.prepare(
+    'SELECT id, user_id FROM members WHERE id = ? AND group_id = ?'
+  ).get(req.params.memberId, req.params.id);
+  if (!member) return res.status(404).json({ error: 'Member not found' });
 
-  const removed = removeMember();
-  if (!removed) return res.status(404).json({ error: 'Member not found' });
+  if (req.params.memberId === req.session.memberId && !active) {
+    return res.status(400).json({ error: "Can't deactivate yourself" });
+  }
+
+  db.prepare('UPDATE members SET active = ? WHERE id = ? AND group_id = ?')
+    .run(active ? 1 : 0, req.params.memberId, req.params.id);
+
   res.json({ ok: true });
 });
 

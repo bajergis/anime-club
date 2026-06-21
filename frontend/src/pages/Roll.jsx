@@ -488,7 +488,23 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                           <img src={m.coverImage.medium} alt="" style={{ width: 32, height: 46, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} />
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{m.title?.english || m.title?.romaji}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{m.title?.english || m.title?.romaji}</span>
+                            {m.averageScore && (
+                              <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--gold)" }}>
+                                ★ {(m.averageScore / 10).toFixed(1)}
+                              </span>
+                            )}
+                            <a
+                              href={`https://anilist.co/anime/${m.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: "0.65rem", color: "var(--text2)", textDecoration: "none", marginLeft: "auto", flexShrink: 0 }}
+                            >
+                              AL ↗
+                            </a>
+                          </div>
                           <div className="text-muted" style={{ fontSize: "0.7rem", fontFamily: "var(--font-mono)" }}>
                             {m.seasonYear} · {m.format} · {m.episodes ?? "?"} eps
                           </div>
@@ -539,7 +555,23 @@ function SelectingView({ rollId, rollNumber, seasonName, status, member, onRefre
                             <img src={r.cover_image_medium} alt="" style={{ width: 32, height: 46, objectFit: "cover", borderRadius: 3, flexShrink: 0, marginRight: 10 }} />
                           )}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{r.title_english || r.title_romaji}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>{r.title_english || r.title_romaji}</span>
+                              {r.average_score && (
+                                <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: "var(--gold)" }}>
+                                  ★ {(r.average_score / 10).toFixed(1)}
+                                </span>
+                              )}
+                              <a
+                                href={`https://anilist.co/anime/${r.anilist_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                style={{ fontSize: "0.65rem", color: "var(--text2)", textDecoration: "none", marginLeft: "auto", flexShrink: 0 }}
+                              >
+                                AL ↗
+                              </a>
+                            </div>
                             <div className="text-muted" style={{ fontSize: "0.7rem", fontFamily: "var(--font-mono)" }}>
                               {r.season_year} · {r.format} · {r.episodes ?? "?"} eps
                             </div>

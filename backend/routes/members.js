@@ -8,9 +8,11 @@ router.use(requireAuth, requireGroupMember);
 
 // GET /api/members — only members in the current user's group
 router.get('/', (req, res) => {
-  const members = db.prepare(
-    'SELECT * FROM members WHERE group_id = ? ORDER BY name'
-  ).all(req.groupId);
+  const includeInactive = req.query.all === 'true';
+  const sql = includeInactive
+    ? 'SELECT * FROM members WHERE group_id = ? ORDER BY active DESC, name'
+    : 'SELECT * FROM members WHERE group_id = ? AND active = 1 ORDER BY name';
+  const members = db.prepare(sql).all(req.groupId);
   res.json(members);
 });
 

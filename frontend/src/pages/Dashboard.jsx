@@ -173,6 +173,28 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Roll complete CTA — owner only */}
+          {currentRollState === "completed" && authMember?.owner_id === authMember?.user_id && (
+            <div className="card mb-16" style={{
+              padding: "14px 16px",
+              border: "1px solid var(--gold)",
+              background: "rgba(140,120,255,0.06)",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent)", marginBottom: 2 }}>
+                  Roll complete
+                </div>
+                <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  All assignments are done. Start the next roll from Seasons.
+                </div>
+              </div>
+              <Link to="/seasons" className="btn btn-primary btn-sm" style={{ whiteSpace: "nowrap" }}>
+                Start Next Roll →
+              </Link>
+            </div>
+          )}
+
           {/* Drafting/selecting — show prompt instead of assignments */}
           {isDraftingOrSelecting ? (
             <div className="card" style={{

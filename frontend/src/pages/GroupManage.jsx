@@ -36,6 +36,18 @@ export default function GroupManage() {
     setLoading(false);
   }
 
+  async function toggleActive(memberId, makeActive) {
+    if (!makeActive && !confirm(`Deactivate this member? They'll be hidden from new rolls but their history stays intact.`)) return;
+    const res = await fetch(`${AUTH}/api/groups/${member.group_id}/members/${memberId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: makeActive }),
+      credentials: "include",
+    }).then(r => r.json());
+    if (res.error) return setError(res.error);
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, active: makeActive ? 1 : 0 } : m));
+  }
+
   async function generateInvite() {
     setGeneratingInvite(true);
     const res = await fetch(`${AUTH}/api/groups/${member.group_id}/invite`, {
@@ -110,6 +122,7 @@ export default function GroupManage() {
               display: "flex", alignItems: "center", gap: 12,
               padding: "10px 14px", background: "var(--bg3)",
               borderRadius: "var(--radius)", border: "1px solid var(--border)",
+              opacity: m.active ? 1 : 0.5,
             }}>
               {m.avatar_url
                 ? <img src={m.avatar_url} alt={m.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
@@ -131,13 +144,32 @@ export default function GroupManage() {
                 }}>owner</span>
               )}
               {isOwner && m.id !== member.id && m.user_id !== member.owner_id && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => removeMember(m.id)}
-                  style={{ color: "var(--red)", borderColor: "rgba(248,113,113,0.3)", fontSize: "0.72rem" }}
-                >
-                  Remove
-                </button>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {m.active ? (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => toggleActive(m.id, false)}
+                      style={{ fontSize: "0.72rem" }}
+                    >
+                      Deactivate
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => toggleActive(m.id, true)}
+                      style={{ color: "var(--green)", borderColor: "rgba(100,200,100,0.3)", fontSize: "0.72rem" }}
+                    >
+                      Reactivate
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => removeMember(m.id)}
+                    style={{ color: "var(--red)", borderColor: "rgba(248,113,113,0.3)", fontSize: "0.72rem" }}
+                  >
+                    Remove
+                  </button>
+                </div>
               )}
             </div>
           ))}

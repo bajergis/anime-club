@@ -32,7 +32,7 @@ router.get('/:id/status', (req, res) => {
   `).all(req.params.id);
 
   const groupMembers = db.prepare(
-    'SELECT id, name, avatar_url, anilist_username FROM members WHERE group_id = ?'
+    'SELECT id, name, avatar_url, anilist_username FROM members WHERE group_id = ? AND active = 1'
   ).all(req.groupId);
 
   const selections = db.prepare(`
@@ -155,7 +155,7 @@ router.post('/:id/generate', (req, res) => {
     const validMembers = db.prepare(`
       SELECT id
       FROM members
-      WHERE group_id = ?
+      WHERE group_id = ? AND active = 1
     `).all(req.groupId);
 
     const validMemberIds = new Set(
