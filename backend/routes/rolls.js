@@ -274,10 +274,16 @@ router.post('/:id/select', async (req, res) => {
   if (totalSelected >= totalAssigners) {
     const selections = db.prepare('SELECT * FROM roll_selections WHERE roll_id = ?').all(req.params.id);
     for (const sel of selections) {
+      let totalEpisodes = null;
+      if (sel.anilist_data) {
+        try {
+          totalEpisodes = JSON.parse(sel.anilist_data).episodes ?? null;
+        } catch {}
+      }
       db.prepare(`
-        INSERT OR IGNORE INTO assignments (roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(sel.roll_id, sel.assignee_id, sel.assigner_id, sel.anime_title, sel.anilist_id, sel.anilist_data);
+        INSERT OR IGNORE INTO assignments (roll_id, assignee_id, assigner_id, anime_title, anilist_id, anilist_data, total_episodes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(sel.roll_id, sel.assignee_id, sel.assigner_id, sel.anime_title, sel.anilist_id, sel.anilist_data, totalEpisodes);
     }
     db.prepare('UPDATE rolls SET state = ? WHERE id = ?').run('active', roll.id);
     return res.json({ ok: true, revealed: true });
