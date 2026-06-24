@@ -756,7 +756,7 @@ function ActiveView({ rollId, rollNumber, seasonName, rollState, seasonId, rollT
   useEffect(() => {
     Promise.all([
       fetch(`${API}/assignments?roll_id=${rollId}`, { credentials: "include" }).then(r => r.json()),
-      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members?all=true`, { credentials: "include" }).then(r => r.json()),
     ]).then(async ([data, mems]) => {
       setAssignments(data);
       setMembers(mems);

@@ -54,7 +54,7 @@ export default function Dashboard() {
     Promise.all([
       fetch(`${API}/stats/overview`, { credentials: "include" }).then(r => r.json()),
       fetch(`${API}/seasons/active`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
-      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members?all=true`, { credentials: "include" }).then(r => r.json()),
       fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.json()),
     ]).then(async ([ov, season, mems, seasons]) => {
       setOverview(ov);

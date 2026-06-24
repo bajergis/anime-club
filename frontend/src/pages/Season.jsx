@@ -333,7 +333,7 @@ export default function Season() {
     Promise.all([
       fetch(`${API}/stats/season/${id}`, { credentials: "include" }).then(r => r.json()),
       fetch(`${API}/assignments?season_id=${id}`, { credentials: "include" }).then(r => r.json()),
-      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members?all=true`, { credentials: "include" }).then(r => r.json()),
     ]).then(([s, a, m]) => {
       setStats(s);
       setAssignments(a);
