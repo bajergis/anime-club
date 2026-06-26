@@ -19,6 +19,12 @@ const ADMIN_IDS = (import.meta.env.VITE_ADMIN_USER_IDS || "").split(",").map(s =
 function Nav() {
   const { member, authState, logout, authBase } = useAuth();  // single call, correct destructure
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   if (member === undefined) return null; // still loading
   if (!member || authState === 'no_group') return null;
@@ -33,88 +39,104 @@ function Nav() {
   ];
 
   return (
-    <nav className="sidebar">
-      <div className="sidebar-logo">
-        <img src={logo} alt="番" className="logo-mark" />
-        <span className="logo-text">AniRoll</span>
-      </div>
-      <ul className="nav-links">
-        {links.map(l => (
-          <li key={l.to}>
-            <NavLink
-              to={l.to}
-              className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}
-              end={l.to === "/"}
-            >
-              <span className="nav-icon">{l.icon}</span>
-              <span>{l.label}</span>
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-        <div className="sidebar-footer">
-          {member ? (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 12px",
-              background: "rgba(255,255,255,0.04)",
-              borderRadius: "var(--radius)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              marginBottom: 12,
-            }}>
-              {member.avatar_url && (
-                <img
-                  src={member.avatar_url}
-                  style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-                  alt={member.name}
-                />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.name}</div>
-                <button
-                  onClick={logout}
-                  style={{ fontSize: "0.68rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                >
-                  logout
-                </button>
-              </div>
-            </div>
-          ) : (
-            <a
-              href={`${authBase}/auth/anilist`}
-              className="btn btn-primary btn-sm"
-              style={{ width: "100%", textAlign: "center", marginBottom: 12 }}
-            >
-              Login with AniList
-            </a>
-          )}
+    <>
+      {/* Mobile hamburger toggle — hidden on desktop via CSS */}
+      <button
+        className="mobile-nav-toggle"
+        onClick={() => setMobileOpen(o => !o)}
+        aria-label="Toggle navigation"
+      >
+        {mobileOpen ? "✕" : "☰"}
+      </button>
 
-          <div style={{
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-            paddingTop: 10,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "4px 10px",
-          }}>
-            {[
-              { href: "/cookies.html", label: "Cookies" },
-              { href: "/privacy.html", label: "Privacy" },
-              { href: "/terms.html", label: "Terms" },
-            ].map(({ href, label }) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: "0.68rem", color: "var(--text2)", textDecoration: "none", opacity: 0.6 }}
-              >
-                {label}
-              </a>
-            ))}
-            <span style={{ fontSize: "0.68rem", color: "var(--text2)", opacity: 0.4, marginLeft: "auto" }}>2026</span>
-          </div>
+      {/* Dim overlay behind the drawer on mobile — click to close */}
+      {mobileOpen && (
+        <div className="mobile-nav-overlay" onClick={() => setMobileOpen(false)} />
+      )}
+
+      <nav className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
+        <div className="sidebar-logo">
+          <img src={logo} alt="番" className="logo-mark" />
+          <span className="logo-text">AniRoll</span>
         </div>
-    </nav>
+        <ul className="nav-links">
+          {links.map(l => (
+            <li key={l.to}>
+              <NavLink
+                to={l.to}
+                className={({ isActive }) => isActive ? "nav-link active" : "nav-link"}
+                end={l.to === "/"}
+              >
+                <span className="nav-icon">{l.icon}</span>
+                <span>{l.label}</span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+          <div className="sidebar-footer">
+            {member ? (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 12px",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: "var(--radius)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                marginBottom: 12,
+              }}>
+                {member.avatar_url && (
+                  <img
+                    src={member.avatar_url}
+                    style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                    alt={member.name}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.name}</div>
+                  <button
+                    onClick={logout}
+                    style={{ fontSize: "0.68rem", color: "var(--text2)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    logout
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <a
+                href={`${authBase}/auth/anilist`}
+                className="btn btn-primary btn-sm"
+                style={{ width: "100%", textAlign: "center", marginBottom: 12 }}
+              >
+                Login with AniList
+              </a>
+            )}
+
+            <div style={{
+              borderTop: "1px solid rgba(255,255,255,0.06)",
+              paddingTop: 10,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "4px 10px",
+            }}>
+              {[
+                { href: "/cookies.html", label: "Cookies" },
+                { href: "/privacy.html", label: "Privacy" },
+                { href: "/terms.html", label: "Terms" },
+              ].map(({ href, label }) => (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: "0.68rem", color: "var(--text2)", textDecoration: "none", opacity: 0.6 }}
+                >
+                  {label}
+                </a>
+              ))}
+              <span style={{ fontSize: "0.68rem", color: "var(--text2)", opacity: 0.4, marginLeft: "auto" }}>2026</span>
+            </div>
+          </div>
+      </nav>
+    </>
   );
 }
 
@@ -164,12 +186,10 @@ function LoginPage() {
   if (member && authState === 'no_group') return <Navigate to="/no-group" replace />;
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div className="login-page">
       {/* ── Left hero panel ─────────────────────────────── */}
-      <div style={{
-        flex: 1,
+      <div className="login-hero" style={{
         background: "#0e0e14",
-        padding: "40px 36px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
@@ -198,7 +218,7 @@ function LoginPage() {
         </div>
 
         {/* Derangement viz */}
-        <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "20px 20px 14px", marginTop: 28 }}>
+        <div className="login-derangement-viz" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "20px 20px 14px", marginTop: 28 }}>
           <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.25)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
             how a roll works
           </div>
@@ -255,10 +275,8 @@ function LoginPage() {
       </div>
 
       {/* ── Right login panel ────────────────────────────── */}
-      <div style={{
-        width: 380,
+      <div className="login-panel" style={{
         background: "#13131f",
-        padding: "40px 32px",
         display: "flex",
         flexDirection: "column",
       }}>

@@ -228,6 +228,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   color: var(--border); opacity: 0.5; pointer-events: none; line-height: 1;
 }
 
+.season-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.season-best-worst {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
 /* --- Member avatar --- */
 .avatar {
   width: 40px; height: 40px; border-radius: 50%;
@@ -298,4 +312,164 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* --- Login page responsive --- */
+.login-page {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.login-hero {
+  flex: 1;
+  padding: 40px 36px;
+  min-width: 0;
+}
+
+.login-panel {
+  width: 380px;
+  flex-shrink: 0;
+  padding: 40px 32px;
+}
+
+/* --- Mobile nav toggle --- */
+.mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 1.1rem;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mobile-nav-overlay {
+  display: none;
+}
+
+/* ============================================================
+   Responsive breakpoints
+   ============================================================ */
+
+@media (max-width: 860px) {
+  .login-page {
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+  }
+  .login-hero {
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 28px 24px;
+  }
+  .login-derangement-viz {
+    display: none;
+  }
+  .login-panel {
+    width: 100%;
+    padding: 28px 24px;
+  }
+
+  .mobile-nav-toggle {
+    display: flex;
+  }
+
+  .mobile-nav-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 90;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 95;
+    width: 240px;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-logo {
+    margin-top: 8px;
+  }
+
+  .main-content {
+    padding: 64px 16px 24px;
+    max-width: 100%;
+  }
+
+  .main-content:has(.no-group-page),
+  .main-content:has(.join-page) {
+    padding: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .grid-2, .grid-3, .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .card:has(.data-table) {
+    overflow-x: auto;
+  }
+  .data-table {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 600px) {
+  .season-banner-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .season-banner-inner > div:last-child {
+    text-align: left;
+    align-self: flex-start;
+  }
+
+  .season-banner .flex.items-center.justify-between {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .season-best-worst {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .season-banner {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-hero { padding: 22px 18px; }
+  .login-panel { padding: 22px 18px; }
+
+  .main-content {
+    padding: 60px 12px 20px;
+  }
+
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; }
 }

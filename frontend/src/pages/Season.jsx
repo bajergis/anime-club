@@ -357,7 +357,7 @@ export default function Season() {
     <div>
       {/* Banner */}
       <div className="season-banner">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+        <div className="season-banner-inner">
 
           {/* Left — title */}
           <div style={{ flex: 1 }}>
@@ -386,7 +386,7 @@ export default function Season() {
           </div>
 
           {/* Right — best/worst cards */}
-          <div style={{ display: "flex", gap: 12, flex: 1, justifyContent: "flex-end" }}>
+          <div className="season-best-worst">
             {best && (() => {
               let cover = null;
               try { const d = JSON.parse(best.anilist_data); cover = d?.cover_image_medium; } catch {}
