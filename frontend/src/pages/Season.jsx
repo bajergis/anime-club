@@ -77,8 +77,8 @@ function AssignmentCard({ assignment: initialA, onUpdate }) {
     <div className="card" style={{ borderLeft: `3px solid ${aniData?.cover_color || "var(--border)"}` }}>
       <div className="flex gap-16">
         <div style={{ flexShrink: 0 }}>
-          {aniData?.cover_image_large
-            ? <img src={aniData.cover_image_large} alt="" style={{ width: 60, height: 85, objectFit: "cover", borderRadius: 4 }} />
+          {(aniData?.cover_image_large || aniData?.cover_image_medium)
+            ? <img src={aniData.cover_image_large || aniData?.cover_image_medium} alt="" style={{ width: 60, height: 85, objectFit: "cover", borderRadius: 4 }} />
             : (
               <div style={{
                 width: 60, height: 85, borderRadius: 4, background: "var(--bg3)",
