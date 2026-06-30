@@ -26,7 +26,7 @@ export default function GroupManage() {
   async function load() {
     setLoading(true);
     const [mems, reqs] = await Promise.all([
-      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members?all=true`, { credentials: "include" }).then(r => r.json()),
       isOwner
         ? fetch(`${AUTH}/api/groups/${member.group_id}/requests`, { credentials: "include" }).then(r => r.json())
         : Promise.resolve([]),

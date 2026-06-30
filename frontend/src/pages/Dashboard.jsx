@@ -55,11 +55,12 @@ export default function Dashboard() {
       fetch(`${API}/stats/overview`, { credentials: "include" }).then(r => r.json()),
       fetch(`${API}/seasons/active`, { credentials: "include" }).then(r => r.ok ? r.json() : null),
       fetch(`${API}/members?all=true`, { credentials: "include" }).then(r => r.json()),
+      fetch(`${API}/members`, { credentials: "include" }).then(r => r.json()),
       fetch(`${API}/seasons`, { credentials: "include" }).then(r => r.json()),
-    ]).then(async ([ov, season, mems, seasons]) => {
+    ]).then(async ([ov, season, allMems, activeMembers, seasons]) => {
       setOverview(ov);
       setActiveSeason(season);
-      setMembers(mems);
+      setMembers(activeMembers);
       setAllSeasons(seasons);
       if (authMember?.group_id) {
         fetch(`${API}/groups/${authMember.group_id}/request-count`, {
@@ -81,7 +82,7 @@ export default function Dashboard() {
             .then(r => r.json())
             .then(async assignments => {
               setCurrentRoll(assignments);
-              const updates = await syncAniListProgress(assignments, mems);
+              const updates = await syncAniListProgress(assignments, allMems);
               if (updates.length) {
                 await applySync(updates, API);
                 setCurrentRoll(prev => prev.map(a => {
